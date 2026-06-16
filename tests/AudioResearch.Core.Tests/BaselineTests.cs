@@ -9,6 +9,22 @@ namespace AudioResearch.Core.Tests;
 public class BaselineTests
 {
     [Fact]
+    public void Knn_IsUsableThroughIFeatureClassifierSeam()
+    {
+        var knn = new KnnClassifier(k: 1);
+        knn.Fit(new List<LabeledVector>
+        {
+            new("a", new[] { 0.0 }),
+            new("b", new[] { 9.0 }),
+        });
+
+        // The evaluation code (and a future ONNX model) depends only on this seam.
+        IFeatureClassifier model = knn;
+        Assert.Equal("a", model.Predict(new[] { 0.3 }));
+        Assert.Equal("b", model.Predict(new[] { 8.7 }));
+    }
+
+    [Fact]
     public void Knn_SeparatesObviousClusters()
     {
         var train = new List<LabeledVector>

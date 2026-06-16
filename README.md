@@ -150,7 +150,7 @@ explicitly passed streams/paths. The CLI owns all user-facing IO and exit codes
 dotnet test AudioResearch.sln
 ```
 
-61 deterministic tests cover WAV round-tripping, generator determinism, framing
+62 deterministic tests cover WAV round-tripping, generator determinism, framing
 and window endpoints, **golden DSP facts** (Parseval's theorem, bin-aligned sine
 amplitude `A·N/2`, ERB/mel filter-bank partition-of-unity, DCT, FFT inverse
 round-trip), band-energy concentration, feature-schema stability (cochlear and

@@ -48,7 +48,9 @@ misclassification case).
 - ✅ 6. `benchmark` command: times FFT (256–4096), STFT, and cochlear/MFCC feature
   extraction; stable JSON schema (records runtime/OS) for regression tracking.
   Timings are wall-clock / non-deterministic by nature.
-- 💡 7. ONNX export/inference path (train elsewhere, run in .NET) — keep optional.
+- ✅ 7. ONNX seam (no runtime dep): `IFeatureClassifier` abstraction implemented by
+  `KnnClassifier`; an ONNX-backed model can implement the same interface. See
+  [onnx.md](onnx.md). The native runtime stays optional/unbundled.
 - 💡 8. Microphone capture abstraction (strictly opt-in, no upload, documented).
 - 💡 9. More datasets via the documented fetch pattern (e.g. ESC-10, CC BY) with
   resampling to a common rate.

@@ -11,7 +11,7 @@ public sealed record LabeledVector(string Label, double[] Features, string? Grou
 /// standardization. Deterministic: ties in the neighbour vote are broken by label
 /// ordinal so predictions never depend on iteration order.
 /// </summary>
-public sealed class KnnClassifier
+public sealed class KnnClassifier : IFeatureClassifier
 {
     private readonly int _k;
     private LabeledVector[] _train = Array.Empty<LabeledVector>();
