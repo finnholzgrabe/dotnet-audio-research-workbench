@@ -45,8 +45,9 @@ misclassification case).
 - ✅ 5. k-fold cross-validation (`--folds N`): stratified, deterministic, reports
   per-fold accuracy + mean ± std and a pooled confusion/per-class report. E.g.
   noisy synthetic 5-fold 0.850 ± 0.064; FSDD speaker (MFCC) 0.986 ± 0.004.
-- 💡 6. `benchmark` command: timing of FFT/STFT/feature extraction at sizes, stable
-  output for regression tracking.
+- ✅ 6. `benchmark` command: times FFT (256–4096), STFT, and cochlear/MFCC feature
+  extraction; stable JSON schema (records runtime/OS) for regression tracking.
+  Timings are wall-clock / non-deterministic by nature.
 - 💡 7. ONNX export/inference path (train elsewhere, run in .NET) — keep optional.
 - 💡 8. Microphone capture abstraction (strictly opt-in, no upload, documented).
 - 💡 9. More datasets via the documented fetch pattern (e.g. ESC-10, CC BY) with

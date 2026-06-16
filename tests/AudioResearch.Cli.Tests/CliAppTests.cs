@@ -230,6 +230,32 @@ public class CliAppTests
         }
     }
 
+    [Fact]
+    public void Benchmark_WritesReportWithStableSchema()
+    {
+        string dir = NewTempDir();
+        try
+        {
+            string report = Path.Combine(dir, "bench.json");
+            (int code, string @out, _) = Run("benchmark", "--iterations", "2", "--seconds", "0.1", "--out", report);
+            Assert.Equal(0, code);
+            Assert.Contains("fft", @out);
+
+            using JsonDocument doc = JsonDocument.Parse(File.ReadAllText(report));
+            JsonElement root = doc.RootElement;
+            Assert.Equal(1, root.GetProperty("schemaVersion").GetInt32());
+            JsonElement results = root.GetProperty("results");
+            Assert.True(results.GetArrayLength() > 0);
+            JsonElement first = results[0];
+            Assert.True(first.GetProperty("meanMs").GetDouble() >= 0);
+            Assert.False(string.IsNullOrEmpty(first.GetProperty("operation").GetString()));
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
     private static string NewTempDir()
     {
         string dir = Path.Combine(Path.GetTempPath(), "audioresearch-test-" + Guid.NewGuid().ToString("N"));

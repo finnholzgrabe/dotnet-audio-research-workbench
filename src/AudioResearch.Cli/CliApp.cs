@@ -42,6 +42,8 @@ public static class CliApp
                     return FeaturesCommand.Run(rest, @out, error);
                 case "ml":
                     return MlCommand.Run(rest, @out, error);
+                case "benchmark":
+                    return BenchmarkCommand.Run(rest, @out, error);
                 default:
                     error.WriteLine($"Unknown command '{command}'. Run '{Name} --help' for usage.");
                     return 2;
@@ -80,6 +82,7 @@ public static class CliApp
         @out.WriteLine("  features bands <wav>          Write per-frame cochlear band energies (CSV).");
         @out.WriteLine("  features summary <wav>        Write a feature summary (JSON).");
         @out.WriteLine("  ml baseline                   Train/evaluate the toy classifier; write a report.");
+        @out.WriteLine("  benchmark                     Time FFT/STFT/feature extraction; write a report.");
         @out.WriteLine();
         @out.WriteLine("COMMON OPTIONS:");
         @out.WriteLine("  --out <path>                  Output file path.");
