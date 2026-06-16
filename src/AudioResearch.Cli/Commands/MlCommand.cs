@@ -15,7 +15,7 @@ public static class MlCommand
         if (args.Count == 0 || args[0] != "baseline")
         {
             error.WriteLine("Usage: ml baseline [--difficulty easy|noisy] [--split random|regime] [--dataset <dir> --labels speaker|digit|auto [--group-by speaker|digit]]");
-            error.WriteLine("                  [--snr-min dB] [--snr-max dB] [--out <path>] [--per-class N] [--k N] [--test-fraction F] [--seed N]");
+            error.WriteLine("                  [--features cochlear|mfcc] [--snr-min dB] [--snr-max dB] [--out <path>] [--per-class N] [--k N] [--test-fraction F] [--seed N]");
             return 2;
         }
 
@@ -40,19 +40,24 @@ public static class MlCommand
 
         string labelScheme = (opts.GetString("labels") ?? "auto").ToLowerInvariant();
         string groupScheme = (opts.GetString("group-by") ?? "none").ToLowerInvariant();
+        string featureSet = (opts.GetString("features") ?? "cochlear").ToLowerInvariant();
+        Func<AudioBuffer, FeatureSummary> summarize = featureSet == "mfcc"
+            ? a => MfccExtractor.Summarize(a)
+            : a => FeatureExtractor.Summarize(a);
+
         if (datasetDir is not null && TryLoadFromDirectory(datasetDir, labelScheme, groupScheme, out var loaded) && loaded.Count > 0)
         {
-            var vectors = ToVectors(loaded, out featureNames);
+            var vectors = ToVectors(loaded, summarize, out featureNames);
             sampleCount = vectors.Count;
             if (groupScheme != "none")
             {
                 // Leave-group-out: no group (e.g. speaker) appears in both splits.
-                datasetSource = $"directory:{datasetDir} (labels={labelScheme}, group-by={groupScheme})";
+                datasetSource = $"directory:{datasetDir} (labels={labelScheme}, group-by={groupScheme}, features={featureSet})";
                 report = BaselineRunner.RunGrouped(vectors, featureNames, groupScheme, k, testFraction, seed);
             }
             else
             {
-                datasetSource = $"directory:{datasetDir} (labels={labelScheme})";
+                datasetSource = $"directory:{datasetDir} (labels={labelScheme}, features={featureSet})";
                 report = BaselineRunner.Run(vectors, featureNames, k, testFraction, seed);
             }
         }
@@ -62,10 +67,10 @@ public static class MlCommand
             DatasetSplit ds = DatasetBuilder.BuildGeneralizationSplit(
                 perClassTrain: perClass, perClassTest: Math.Max(4, perClass / 2),
                 seconds: seconds, sampleRate: rate, seed: seed);
-            var train = ToVectors(ds.Train, out featureNames);
-            var test = ToVectors(ds.Test, out _);
+            var train = ToVectors(ds.Train, summarize, out featureNames);
+            var test = ToVectors(ds.Test, summarize, out _);
             sampleCount = train.Count + test.Count;
-            datasetSource = $"synthetic noisy, regime-holdout (low->high freq)";
+            datasetSource = $"synthetic noisy, regime-holdout (low->high freq), features={featureSet}";
             report = BaselineRunner.RunWithSplit(train, test, featureNames, k, seed);
         }
         else
@@ -74,11 +79,11 @@ public static class MlCommand
             IReadOnlyList<LabeledAudio> dataset = difficulty == "easy"
                 ? DatasetBuilder.Build(perClass, seconds, rate)
                 : DatasetBuilder.BuildVaried(perClass, seconds, rate, snrMin, snrMax, seed);
-            var vectors = ToVectors(dataset, out featureNames);
+            var vectors = ToVectors(dataset, summarize, out featureNames);
             sampleCount = vectors.Count;
             datasetSource = difficulty == "easy"
-                ? "synthetic easy (separable)"
-                : string.Create(CultureInfo.InvariantCulture, $"synthetic noisy, SNR {snrMin:0}..{snrMax:0} dB");
+                ? $"synthetic easy (separable), features={featureSet}"
+                : string.Create(CultureInfo.InvariantCulture, $"synthetic noisy, SNR {snrMin:0}..{snrMax:0} dB, features={featureSet}");
             report = BaselineRunner.Run(vectors, featureNames, k, testFraction, seed);
         }
 
@@ -108,13 +113,16 @@ public static class MlCommand
         return 0;
     }
 
-    private static List<LabeledVector> ToVectors(IReadOnlyList<LabeledAudio> dataset, out IReadOnlyList<string> featureNames)
+    private static List<LabeledVector> ToVectors(
+        IReadOnlyList<LabeledAudio> dataset,
+        Func<AudioBuffer, FeatureSummary> summarize,
+        out IReadOnlyList<string> featureNames)
     {
         var vectors = new List<LabeledVector>(dataset.Count);
         IReadOnlyList<string>? names = null;
         foreach (LabeledAudio item in dataset)
         {
-            FeatureSummary summary = FeatureExtractor.Summarize(item.Audio);
+            FeatureSummary summary = summarize(item.Audio);
             names ??= summary.Names;
             vectors.Add(new LabeledVector(item.Label, summary.Vector, item.Group));
         }

@@ -39,8 +39,9 @@ misclassification case).
 
 ## Later
 
-- 💡 4. Richer features (MFCC + deltas) to lift digit accuracy *honestly*, compared
-  side-by-side against the current generic features.
+- ✅ 4. Richer features (MFCC + deltas), selectable via `--features cochlear|mfcc`.
+  Honest side-by-side on FSDD digits: speaker-independent 0.603 → 0.634, random
+  split 0.941 → 0.964.
 - 💡 5. k-fold cross-validation option (`--folds`) instead of a single split, with
   mean ± std accuracy.
 - 💡 6. `benchmark` command: timing of FFT/STFT/feature extraction at sizes, stable

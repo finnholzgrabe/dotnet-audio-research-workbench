@@ -28,11 +28,13 @@ machinery.
 - `AudioResearch.Core.Dsp`
   - `Windows.Hann` (periodic), `Framing` (overlapping frames + window apply),
     `Fourier` (self-contained radix-2 FFT, magnitude spectrum, bin frequency),
-    `Stft` (windowed short-time magnitude transform).
+    `Stft` (windowed short-time magnitude transform), `Dct` (DCT-II for MFCCs).
 - `AudioResearch.Core.Features`
   - `BandEnergy` (linear bands), `CochlearFilterBank` (ERB-spaced triangular
     filters), `FeatureExtractor` (per-frame band energies + a fixed-length
-    summary vector with stable, named fields).
+    summary vector with stable, named fields), `MelFilterBank` + `MfccExtractor`
+    (MFCCs with delta coefficients). The ML baseline selects the feature set via
+    `--features cochlear|mfcc`.
 - `AudioResearch.Core.Experiments`
   - `DatasetBuilder` — deterministic labeled fixtures: `Build` (separable),
     `BuildVaried` (overlapping + noisy), and `BuildGeneralizationSplit`
