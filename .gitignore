@@ -19,5 +19,10 @@ datasets/
 *.pt
 *.pkl
 
+# Python (optional experiments only)
+.venv/
+__pycache__/
+*.pyc
+
 .DS_Store
 *.log

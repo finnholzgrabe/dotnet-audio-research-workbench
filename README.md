@@ -108,6 +108,17 @@ Reproducible accuracy across the modes (seed 42, defaults):
 > real recordings. None of this is a medically meaningful task; the value is a
 > tested, reproducible feature-to-classifier pipeline with honest evaluation.
 
+## Visualization
+
+An optional Python helper renders one figure from the CLI's artifacts: the
+transformation pipeline (waveform → STFT spectrogram → cochlear band-energy
+heatmap) and the ML results (confusion matrix + accuracy across runs).
+
+![Pipeline and results overview](docs/images/overview.png)
+
+It reads only the deterministic CSV/JSON the .NET CLI emits, so the figure
+reflects the actual pipeline. Setup and commands: [experiments/README.md](experiments/README.md).
+
 ## Architecture
 
 ```text
