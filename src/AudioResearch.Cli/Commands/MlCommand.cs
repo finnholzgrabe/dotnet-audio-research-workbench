@@ -15,7 +15,7 @@ public static class MlCommand
         if (args.Count == 0 || args[0] != "baseline")
         {
             error.WriteLine("Usage: ml baseline [--difficulty easy|noisy] [--split random|regime] [--dataset <dir> --labels speaker|digit|auto [--group-by speaker|digit]]");
-            error.WriteLine("                  [--features cochlear|mfcc] [--snr-min dB] [--snr-max dB] [--out <path>] [--per-class N] [--k N] [--test-fraction F] [--seed N]");
+            error.WriteLine("                  [--features cochlear|mfcc] [--folds N] [--snr-min dB] [--snr-max dB] [--out <path>] [--per-class N] [--k N] [--test-fraction F] [--seed N]");
             return 2;
         }
 
@@ -35,15 +35,21 @@ public static class MlCommand
 
         string datasetSource;
         BaselineReport report;
+        CrossValidationReport? cv = null;
         IReadOnlyList<string> featureNames;
         int sampleCount;
 
         string labelScheme = (opts.GetString("labels") ?? "auto").ToLowerInvariant();
         string groupScheme = (opts.GetString("group-by") ?? "none").ToLowerInvariant();
         string featureSet = (opts.GetString("features") ?? "cochlear").ToLowerInvariant();
+        int folds = opts.GetInt("folds", 1);
         Func<AudioBuffer, FeatureSummary> summarize = featureSet == "mfcc"
             ? a => MfccExtractor.Summarize(a)
             : a => FeatureExtractor.Summarize(a);
+
+        // k-fold CV applies only to the plain stratified-random paths (not regime
+        // generalization or group-holdout, which define their own split).
+        bool useCv = folds > 1 && groupScheme == "none" && !(difficulty == "noisy" && split == "regime");
 
         if (datasetDir is not null && TryLoadFromDirectory(datasetDir, labelScheme, groupScheme, out var loaded) && loaded.Count > 0)
         {
@@ -54,6 +60,12 @@ public static class MlCommand
                 // Leave-group-out: no group (e.g. speaker) appears in both splits.
                 datasetSource = $"directory:{datasetDir} (labels={labelScheme}, group-by={groupScheme}, features={featureSet})";
                 report = BaselineRunner.RunGrouped(vectors, featureNames, groupScheme, k, testFraction, seed);
+            }
+            else if (useCv)
+            {
+                datasetSource = $"directory:{datasetDir} (labels={labelScheme}, features={featureSet})";
+                cv = BaselineRunner.RunCrossValidation(vectors, featureNames, k, folds, seed);
+                report = cv.Pooled;
             }
             else
             {
@@ -84,14 +96,27 @@ public static class MlCommand
             datasetSource = difficulty == "easy"
                 ? $"synthetic easy (separable), features={featureSet}"
                 : string.Create(CultureInfo.InvariantCulture, $"synthetic noisy, SNR {snrMin:0}..{snrMax:0} dB, features={featureSet}");
-            report = BaselineRunner.Run(vectors, featureNames, k, testFraction, seed);
+            if (useCv)
+            {
+                cv = BaselineRunner.RunCrossValidation(vectors, featureNames, k, folds, seed);
+                report = cv.Pooled;
+            }
+            else
+            {
+                report = BaselineRunner.Run(vectors, featureNames, k, testFraction, seed);
+            }
         }
 
-        WriteReport(report, datasetSource, outPath);
+        WriteReport(report, cv, datasetSource, outPath);
 
         @out.WriteLine($"Dataset:   {datasetSource}, {sampleCount} samples, {report.Classes.Count} classes");
         @out.WriteLine($"Model:     {report.ModelType}, k={report.K}");
         @out.WriteLine($"Split:     {report.TrainCount} train / {report.TestCount} test ({report.SplitStrategy}, seed {report.Seed})");
+        if (cv is not null)
+        {
+            @out.WriteLine(string.Create(CultureInfo.InvariantCulture,
+                $"CV folds:  {cv.Folds}-fold, accuracy {cv.MeanAccuracy:0.000} ± {cv.StdAccuracy:0.000} (per-fold: {string.Join(", ", cv.FoldAccuracies.Select(a => a.ToString("0.000", CultureInfo.InvariantCulture)))})"));
+        }
         if (report.TestGroups.Count > 0)
         {
             @out.WriteLine($"Held-out:  {string.Join(", ", report.TestGroups)} (train: {string.Join(", ", report.TrainGroups)})");
@@ -183,7 +208,29 @@ public static class MlCommand
         }
     }
 
-    private static void WriteReport(BaselineReport report, string datasetSource, string outPath)
+    private static JsonNode? CvNode(CrossValidationReport? cv)
+    {
+        if (cv is null)
+        {
+            return null;
+        }
+
+        var folds = new JsonArray();
+        foreach (double a in cv.FoldAccuracies)
+        {
+            folds.Add(Math.Round(a, 6, MidpointRounding.AwayFromZero));
+        }
+
+        return new JsonObject
+        {
+            ["folds"] = cv.Folds,
+            ["meanAccuracy"] = Math.Round(cv.MeanAccuracy, 6, MidpointRounding.AwayFromZero),
+            ["stdAccuracy"] = Math.Round(cv.StdAccuracy, 6, MidpointRounding.AwayFromZero),
+            ["foldAccuracies"] = folds,
+        };
+    }
+
+    private static void WriteReport(BaselineReport report, CrossValidationReport? cv, string datasetSource, string outPath)
     {
         var confusion = new JsonObject();
         for (int i = 0; i < report.Classes.Count; i++)
@@ -258,6 +305,7 @@ public static class MlCommand
             ["seed"] = report.Seed,
             ["accuracy"] = Math.Round(report.Accuracy, 6, MidpointRounding.AwayFromZero),
             ["macroF1"] = Math.Round(report.MacroF1, 6, MidpointRounding.AwayFromZero),
+            ["crossValidation"] = CvNode(cv),
             ["perClass"] = perClass,
             ["confusionMatrix"] = confusion,
             ["disclaimer"] = "Toy baseline on synthetic audio for engineering evidence only. Not a medical or production model.",

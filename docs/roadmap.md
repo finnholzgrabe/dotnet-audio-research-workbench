@@ -42,8 +42,9 @@ misclassification case).
 - ✅ 4. Richer features (MFCC + deltas), selectable via `--features cochlear|mfcc`.
   Honest side-by-side on FSDD digits: speaker-independent 0.603 → 0.634, random
   split 0.941 → 0.964.
-- 💡 5. k-fold cross-validation option (`--folds`) instead of a single split, with
-  mean ± std accuracy.
+- ✅ 5. k-fold cross-validation (`--folds N`): stratified, deterministic, reports
+  per-fold accuracy + mean ± std and a pooled confusion/per-class report. E.g.
+  noisy synthetic 5-fold 0.850 ± 0.064; FSDD speaker (MFCC) 0.986 ± 0.004.
 - 💡 6. `benchmark` command: timing of FFT/STFT/feature extraction at sizes, stable
   output for regression tracking.
 - 💡 7. ONNX export/inference path (train elsewhere, run in .NET) — keep optional.

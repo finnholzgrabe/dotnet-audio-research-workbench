@@ -81,6 +81,33 @@ public class BaselineTests
     }
 
     [Fact]
+    public void CrossValidation_TestsEverySampleOnce_AndIsDeterministic()
+    {
+        var vectors = DatasetBuilder.Build(perClass: 10, seconds: 0.3)
+            .Select(d => new LabeledVector(d.Label, FeatureExtractor.Summarize(d.Audio).Vector))
+            .ToList();
+        IReadOnlyList<string> names = FeatureExtractor.Summarize(SignalGenerator.Sine(440, 0.3, 16000)).Names;
+
+        CrossValidationReport cv1 = BaselineRunner.RunCrossValidation(vectors, names, k: 3, folds: 5, seed: 42);
+        CrossValidationReport cv2 = BaselineRunner.RunCrossValidation(vectors, names, k: 3, folds: 5, seed: 42);
+
+        Assert.Equal(5, cv1.Folds);
+        Assert.Equal(5, cv1.FoldAccuracies.Count);
+        Assert.Equal(vectors.Count, cv1.Pooled.TestCount);                       // each sample tested once
+        Assert.Equal(vectors.Count, cv1.Pooled.Confusion.Sum(r => r.Sum()));     // pooled over all samples
+        Assert.Equal(cv1.MeanAccuracy, cv2.MeanAccuracy, 9);                     // deterministic
+        Assert.InRange(cv1.MeanAccuracy, 0.0, 1.0);
+        Assert.StartsWith("stratified-5fold-cv", cv1.Pooled.SplitStrategy);
+    }
+
+    [Fact]
+    public void CrossValidation_ThrowsForFewerThanTwoFolds()
+    {
+        var vectors = new List<LabeledVector> { new("a", new[] { 0.0 }), new("b", new[] { 1.0 }) };
+        Assert.Throws<ArgumentOutOfRangeException>(() => BaselineRunner.RunCrossValidation(vectors, new[] { "f" }, folds: 1));
+    }
+
+    [Fact]
     public void PerClassMetrics_ComputedFromConfusion()
     {
         // Two well-separated clusters -> perfect classification; every class scores

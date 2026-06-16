@@ -44,6 +44,26 @@ public sealed class BaselineReport
     public required IReadOnlyDictionary<string, int> ClassCounts { get; init; }
 }
 
+/// <summary>Result of stratified k-fold cross-validation.</summary>
+public sealed class CrossValidationReport
+{
+    public required int Folds { get; init; }
+
+    /// <summary>Held-out accuracy for each fold.</summary>
+    public required IReadOnlyList<double> FoldAccuracies { get; init; }
+
+    public required double MeanAccuracy { get; init; }
+
+    /// <summary>Population standard deviation of the fold accuracies.</summary>
+    public required double StdAccuracy { get; init; }
+
+    /// <summary>
+    /// Pooled report over all folds: every sample is tested exactly once, so the
+    /// confusion matrix and per-class metrics cover the whole dataset.
+    /// </summary>
+    public required BaselineReport Pooled { get; init; }
+}
+
 /// <summary>
 /// Trains and evaluates the k-NN baseline on labeled feature vectors using a
 /// deterministic, seeded, stratified train/test split.
@@ -186,6 +206,118 @@ public static class BaselineRunner
             trainGroupList, testGroupList);
     }
 
+    /// <summary>
+    /// Stratified k-fold cross-validation. Each class is split into
+    /// <paramref name="folds"/> parts (seeded); every fold is held out once. Returns
+    /// per-fold accuracies (mean ± std) plus a pooled report over all samples.
+    /// </summary>
+    public static CrossValidationReport RunCrossValidation(
+        IReadOnlyList<LabeledVector> samples,
+        IReadOnlyList<string> featureNames,
+        int k = 3,
+        int folds = 5,
+        int seed = 42)
+    {
+        ArgumentNullException.ThrowIfNull(samples);
+        ArgumentNullException.ThrowIfNull(featureNames);
+        if (folds < 2)
+        {
+            throw new ArgumentOutOfRangeException(nameof(folds), "Need at least two folds.");
+        }
+
+        if (samples.Count == 0)
+        {
+            throw new ArgumentException("Dataset must not be empty.", nameof(samples));
+        }
+
+        // Stratified fold assignment: shuffle each class, deal round-robin.
+        var rng = new Random(seed);
+        var foldOf = new int[samples.Count];
+        var byClass = Enumerable.Range(0, samples.Count)
+            .GroupBy(i => samples[i].Label, StringComparer.Ordinal)
+            .OrderBy(g => g.Key, StringComparer.Ordinal);
+        foreach (var group in byClass)
+        {
+            List<int> indices = group.ToList();
+            Shuffle(indices, rng);
+            for (int j = 0; j < indices.Count; j++)
+            {
+                foldOf[indices[j]] = j % folds;
+            }
+        }
+
+        var classes = samples
+            .Select(s => s.Label)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(s => s, StringComparer.Ordinal)
+            .ToList();
+
+        var pooled = new int[classes.Count][];
+        for (int i = 0; i < classes.Count; i++)
+        {
+            pooled[i] = new int[classes.Count];
+        }
+
+        var foldAccuracies = new double[folds];
+        for (int f = 0; f < folds; f++)
+        {
+            var train = new List<LabeledVector>();
+            var test = new List<LabeledVector>();
+            for (int i = 0; i < samples.Count; i++)
+            {
+                (foldOf[i] == f ? test : train).Add(samples[i]);
+            }
+
+            BaselineReport rep = Evaluate(train, test, samples, featureNames, k, (double)test.Count / samples.Count, seed, $"cv-fold-{f}");
+            foldAccuracies[f] = rep.Accuracy;
+            for (int a = 0; a < classes.Count; a++)
+            {
+                for (int b = 0; b < classes.Count; b++)
+                {
+                    pooled[a][b] += rep.Confusion[a][b];
+                }
+            }
+        }
+
+        double mean = foldAccuracies.Average();
+        double std = Math.Sqrt(foldAccuracies.Select(a => (a - mean) * (a - mean)).Average());
+
+        int correct = Enumerable.Range(0, classes.Count).Sum(i => pooled[i][i]);
+        (ClassMetrics[] perClass, double macroF1) = BuildPerClass(pooled, classes);
+        var classCounts = samples
+            .GroupBy(s => s.Label, StringComparer.Ordinal)
+            .OrderBy(g => g.Key, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
+
+        var pooledReport = new BaselineReport
+        {
+            ModelType = "k-nearest-neighbours (z-score standardized, Euclidean)",
+            K = k,
+            FeatureCount = featureNames.Count,
+            FeatureNames = featureNames,
+            TrainCount = samples.Count - samples.Count / folds,
+            TestCount = samples.Count,
+            TestFraction = 1.0 / folds,
+            Seed = seed,
+            Accuracy = (double)correct / samples.Count,
+            MacroF1 = macroF1,
+            PerClass = perClass,
+            SplitStrategy = $"stratified-{folds}fold-cv",
+            Classes = classes,
+            Confusion = pooled,
+            ClassCounts = classCounts,
+        };
+
+        return new CrossValidationReport
+        {
+            Folds = folds,
+            FoldAccuracies = foldAccuracies,
+            MeanAccuracy = mean,
+            StdAccuracy = std,
+            Pooled = pooledReport,
+        };
+    }
+
     private static BaselineReport Evaluate(
         IReadOnlyList<LabeledVector> train,
         IReadOnlyList<LabeledVector> test,
@@ -230,27 +362,7 @@ public static class BaselineRunner
             .OrderBy(g => g.Key, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
 
-        // Per-class precision/recall/F1 derived from the confusion matrix.
-        var perClass = new ClassMetrics[classes.Count];
-        double f1Sum = 0.0;
-        for (int i = 0; i < classes.Count; i++)
-        {
-            int tp = confusion[i][i];
-            int rowSum = confusion[i].Sum();              // actual class i
-            int colSum = 0;                               // predicted class i
-            for (int r = 0; r < classes.Count; r++)
-            {
-                colSum += confusion[r][i];
-            }
-
-            double precision = colSum > 0 ? (double)tp / colSum : 0.0;
-            double recall = rowSum > 0 ? (double)tp / rowSum : 0.0;
-            double f1 = (precision + recall) > 0 ? 2 * precision * recall / (precision + recall) : 0.0;
-            perClass[i] = new ClassMetrics(classes[i], precision, recall, f1, rowSum);
-            f1Sum += f1;
-        }
-
-        double macroF1 = classes.Count > 0 ? f1Sum / classes.Count : 0.0;
+        (ClassMetrics[] perClass, double macroF1) = BuildPerClass(confusion, classes);
 
         return new BaselineReport
         {
@@ -272,6 +384,31 @@ public static class BaselineRunner
             Confusion = confusion,
             ClassCounts = classCounts,
         };
+    }
+
+    private static (ClassMetrics[] PerClass, double MacroF1) BuildPerClass(int[][] confusion, IReadOnlyList<string> classes)
+    {
+        var perClass = new ClassMetrics[classes.Count];
+        double f1Sum = 0.0;
+        for (int i = 0; i < classes.Count; i++)
+        {
+            int tp = confusion[i][i];
+            int rowSum = confusion[i].Sum();              // actual class i
+            int colSum = 0;                               // predicted class i
+            for (int r = 0; r < classes.Count; r++)
+            {
+                colSum += confusion[r][i];
+            }
+
+            double precision = colSum > 0 ? (double)tp / colSum : 0.0;
+            double recall = rowSum > 0 ? (double)tp / rowSum : 0.0;
+            double f1 = (precision + recall) > 0 ? 2 * precision * recall / (precision + recall) : 0.0;
+            perClass[i] = new ClassMetrics(classes[i], precision, recall, f1, rowSum);
+            f1Sum += f1;
+        }
+
+        double macroF1 = classes.Count > 0 ? f1Sum / classes.Count : 0.0;
+        return (perClass, macroF1);
     }
 
     private static void Shuffle<T>(IList<T> list, Random rng)

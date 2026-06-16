@@ -146,13 +146,14 @@ explicitly passed streams/paths. The CLI owns all user-facing IO and exit codes
 dotnet test AudioResearch.sln
 ```
 
-58 deterministic tests cover WAV round-tripping, generator determinism, framing
+60 deterministic tests cover WAV round-tripping, generator determinism, framing
 and window endpoints, **golden DSP facts** (Parseval's theorem, bin-aligned sine
 amplitude `A·N/2`, ERB/mel filter-bank partition-of-unity, DCT, FFT inverse
 round-trip), band-energy concentration, feature-schema stability (cochlear and
 MFCC), noise/augmentation SNR correctness, the ML baseline's accuracy/determinism,
-per-class metrics, and the leave-speakers-out split. FSDD filename label parsing is
-covered offline; the network download itself is not exercised in CI.
+per-class metrics, k-fold cross-validation, and the leave-speakers-out split. FSDD
+filename label parsing is covered offline; the network download itself is not
+exercised in CI.
 
 ## Roadmap
 
