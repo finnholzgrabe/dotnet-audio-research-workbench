@@ -1,17 +1,71 @@
 # Architecture Notes
 
-The project should keep domain logic separate from command-line and experiment concerns.
+The project keeps domain logic separate from command-line and experiment
+concerns. The design bias is boring, explicit, testable code over framework
+machinery.
 
-## Planned Components
+## Projects
 
-- `AudioResearch.Core`: WAV IO, synthetic audio generation, DSP primitives, feature extraction.
-- `AudioResearch.Cli`: command parsing, filesystem IO, user-facing output, exit codes.
-- `AudioResearch.ML`: simple model abstractions and baseline training/inference hooks.
-- `tests`: deterministic algorithm and CLI tests.
-- `experiments`: optional Python notebooks/scripts for exploration only.
+| Project | Responsibility | Depends on |
+| --- | --- | --- |
+| `AudioResearch.Core` | WAV IO, synthetic audio generation, DSP primitives, feature extraction, dataset building. No console IO. | — |
+| `AudioResearch.ML` | Feature-vector abstractions, k-NN classifier, baseline train/eval runner. | Core |
+| `AudioResearch.Cli` | Argument parsing, filesystem IO, user-facing output, exit codes. | Core, ML |
+| `AudioResearch.Core.Tests` | Deterministic DSP / feature / WAV / ML tests. | Core, ML |
+| `AudioResearch.Cli.Tests` | CLI command-contract and exit-code tests. | Cli, Core, ML |
 
-## Design Bias
+## Core namespaces
 
-Prefer small, explicit modules with tests over broad framework usage.
+- `AudioResearch.Core.Audio`
+  - `AudioBuffer` — interleaved float samples + sample rate + channel count;
+    `ToMono`, `Peak`, `Duration`, `FrameCount`.
+  - `SignalGenerator` — deterministic sine, chirp, white noise (seeded),
+    amplitude-modulated, and speech-like envelope generators.
+  - `WavFile` — strict 16-bit PCM reader/writer (mono and multi-channel),
+    stream-based with `leaveOpen` so callers own stream lifetime.
+- `AudioResearch.Core.Dsp`
+  - `Windows.Hann` (periodic), `Framing` (overlapping frames + window apply),
+    `Fourier` (self-contained radix-2 FFT, magnitude spectrum, bin frequency),
+    `Stft` (windowed short-time magnitude transform).
+- `AudioResearch.Core.Features`
+  - `BandEnergy` (linear bands), `CochlearFilterBank` (ERB-spaced triangular
+    filters), `FeatureExtractor` (per-frame band energies + a fixed-length
+    summary vector with stable, named fields).
+- `AudioResearch.Core.Experiments`
+  - `DatasetBuilder` — deterministic labeled fixtures for the ML baseline.
 
-The value of this project is not that it solves hearing science. The value is that it shows careful engineering in a research-adjacent audio domain.
+## Design decisions
+
+- **No third-party runtime dependencies.** The FFT and k-NN are implemented in
+  ~150 lines each so the build is offline-friendly and every result is
+  deterministic across machines. A mature FFT package would be a reasonable
+  swap later; the surface (`Fourier`) is small and isolated.
+- **Hand-rolled CLI** (`Options` + `CliApp`) instead of a parser dependency,
+  per the v0.1 brief. Commands return explicit exit codes and write through
+  injected `TextWriter`s, which makes them unit-testable without spawning a
+  process.
+- **Stable output schemas.** JSON outputs carry a `schemaVersion`; the feature
+  summary vector has fixed length and names so it can feed both the JSON export
+  and the ML pipeline.
+
+## Pipeline
+
+```text
+WAV / generator -> AudioBuffer -> normalize -> frame + Hann window -> FFT magnitude (STFT)
+   -> cochlear filter bank (ERB) -> log energies -> per-frame bands (CSV)
+                                                  -> summary vector (JSON, ML features)
+                                                       -> k-NN baseline -> report (JSON)
+```
+
+## Exit codes
+
+- `0` success
+- `1` handled user error (missing/invalid file, bad data)
+- `2` usage error (unknown command, missing argument)
+
+## Limitations
+
+The value of this project is careful engineering in a research-adjacent audio
+domain, not solving hearing science. The cochlear filter bank is an
+approximation (see [signal-processing-notes.md](signal-processing-notes.md))
+and the ML task is intentionally easy.
