@@ -122,6 +122,10 @@ heatmap) and the ML results (confusion matrix + accuracy across runs).
 It reads only the deterministic CSV/JSON the .NET CLI emits, so the figure
 reflects the actual pipeline. Setup and commands: [experiments/README.md](experiments/README.md).
 
+A static showcase page lives in [`site/`](site/index.html) and is deployed to
+GitHub Pages via [.github/workflows/pages.yml](.github/workflows/pages.yml) on push
+(enable Pages → "GitHub Actions" in the repo settings after the first push).
+
 ## Architecture
 
 ```text

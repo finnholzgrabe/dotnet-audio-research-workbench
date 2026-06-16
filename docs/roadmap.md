@@ -52,7 +52,9 @@ misclassification case).
 - 💡 8. Microphone capture abstraction (strictly opt-in, no upload, documented).
 - 💡 9. More datasets via the documented fetch pattern (e.g. ESC-10, CC BY) with
   resampling to a common rate.
-- 💡 10. GitHub Pages demo publishing the generated visualization(s).
+- ✅ 10. GitHub Pages demo: static `site/index.html` showcasing the visualization,
+  results, and quick start; `.github/workflows/pages.yml` deploys it on push.
+  (Requires enabling Pages → "GitHub Actions" in repo settings after first push.)
 
 ## Principles to keep
 

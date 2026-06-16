@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cochlear Audio Research Workbench</title>
+  <style>
+    :root { --fg:#1b1f24; --muted:#5c6670; --accent:#2b6cb0; --bg:#ffffff; --card:#f5f7fa; --border:#e2e8f0; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+           color:var(--fg); background:var(--bg); line-height:1.6; }
+    .wrap { max-width: 900px; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+    header h1 { font-size: 2rem; margin: 0 0 .25rem; }
+    .tag { color: var(--muted); font-size: 1.05rem; margin: 0 0 1.25rem; }
+    .pills { display:flex; flex-wrap:wrap; gap:.4rem; margin-bottom:2rem; }
+    .pill { background:var(--card); border:1px solid var(--border); border-radius:999px; padding:.15rem .7rem; font-size:.8rem; color:var(--muted); }
+    h2 { margin-top: 2.25rem; border-bottom:1px solid var(--border); padding-bottom:.3rem; }
+    figure { margin: 1rem 0; }
+    figure img { width:100%; border:1px solid var(--border); border-radius:8px; }
+    figcaption { color:var(--muted); font-size:.85rem; margin-top:.4rem; }
+    table { border-collapse: collapse; width:100%; font-size:.92rem; }
+    th, td { text-align:left; padding:.45rem .6rem; border-bottom:1px solid var(--border); }
+    th { color:var(--muted); font-weight:600; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    pre { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:1rem; overflow:auto; font-size:.85rem; }
+    .two { display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:1rem 1.1rem; }
+    .card h3 { margin:.1rem 0 .5rem; font-size:1rem; }
+    .card ul { margin:.2rem 0; padding-left:1.1rem; }
+    a { color:var(--accent); }
+    .note { color:var(--muted); font-size:.85rem; }
+    @media (max-width:640px){ .two{grid-template-columns:1fr;} }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Cochlear Audio Research Workbench</h1>
+      <p class="tag">A small .NET-first research-software workbench for audio feature extraction,
+        cochlear-inspired filter-bank features, and a reproducible toy ML baseline.</p>
+      <div class="pills">
+        <span class="pill">C# / .NET 8</span>
+        <span class="pill">DSP</span>
+        <span class="pill">FFT / STFT</span>
+        <span class="pill">MFCC</span>
+        <span class="pill">cochlear ERB bank</span>
+        <span class="pill">k-NN baseline</span>
+        <span class="pill">61 tests</span>
+      </div>
+    </header>
+
+    <p>
+      <a href="https://github.com/Finn/cochlear-audio-research-workbench">Source on GitHub</a> ·
+      Not a medical device, cochlear-implant simulator, or validated auditory model.
+    </p>
+
+    <h2>Pipeline &amp; results</h2>
+    <figure>
+      <img src="overview.png" alt="Waveform, STFT spectrogram, cochlear band energies, confusion matrix, and accuracy comparison" />
+      <figcaption>One figure rendered from the CLI's CSV/JSON artifacts: waveform → STFT spectrogram →
+        cochlear band-energy heatmap, plus the ML confusion matrix and accuracy across runs.</figcaption>
+    </figure>
+
+    <div class="two">
+      <div class="card">
+        <h3>What it does</h3>
+        <ul>
+          <li>Deterministic WAV fixtures &amp; 16-bit PCM IO</li>
+          <li>Framing, Hann window, radix-2 FFT, STFT</li>
+          <li>Cochlear-inspired (ERB) filter bank + MFCCs</li>
+          <li>k-NN baseline with stratified / k-fold / leave-speakers-out evaluation</li>
+          <li>Optional real data: Free Spoken Digit Dataset (CC BY-SA 4.0)</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>What it is not</h3>
+        <ul>
+          <li>Not a medical or clinical tool</li>
+          <li>Not a validated auditory model</li>
+          <li>Not production-grade ML</li>
+        </ul>
+        <p class="note">The cochlear filter bank is a documented engineering approximation.</p>
+      </div>
+    </div>
+
+    <h2>Honest, reproducible accuracy (seed 42)</h2>
+    <table>
+      <thead><tr><th>Task</th><th>Setup</th><th>Accuracy</th></tr></thead>
+      <tbody>
+        <tr><td>Synthetic (easy)</td><td>separable, 4 classes</td><td>1.000</td></tr>
+        <tr><td>Synthetic (noisy)</td><td>overlapping + SNR 0–20 dB</td><td>0.708</td></tr>
+        <tr><td>Synthetic (noisy)</td><td>frequency-regime holdout</td><td>0.825</td></tr>
+        <tr><td>FSDD speaker</td><td>real, 5 speakers</td><td>0.976</td></tr>
+        <tr><td>FSDD digit</td><td>random split</td><td>0.941</td></tr>
+        <tr><td>FSDD digit</td><td><strong>speaker-independent</strong></td><td>0.603</td></tr>
+      </tbody>
+    </table>
+    <p class="note">The drop to 0.603 under a speaker-independent split is the honest measure of digit
+      generalization — the same speaker can no longer appear in both train and test.</p>
+
+    <h2>Quick start</h2>
+<pre>dotnet build AudioResearch.sln -c Release
+DLL=src/AudioResearch.Cli/bin/Release/net8.0/AudioResearch.Cli.dll
+
+dotnet "$DLL" generate tone --freq 440 --seconds 1 --out samples/generated/tone.wav
+dotnet "$DLL" inspect samples/generated/tone.wav
+dotnet "$DLL" ml baseline --out artifacts/baseline-report.json</pre>
+
+    <p class="note">Generated with the project's own CLI. See the repository README and
+      <code>docs/</code> for architecture, signal-processing notes, datasets, and the experiment log.</p>
+  </div>
+</body>
+</html>
