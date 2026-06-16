@@ -2,8 +2,11 @@ using AudioResearch.Core.Audio;
 
 namespace AudioResearch.Core.Experiments;
 
-/// <summary>A labeled synthetic audio sample.</summary>
-public sealed record LabeledAudio(string Label, AudioBuffer Audio);
+/// <summary>
+/// A labeled audio sample. <paramref name="Group"/> is an optional grouping key
+/// (e.g. the speaker) used for group-aware, leave-group-out evaluation.
+/// </summary>
+public sealed record LabeledAudio(string Label, AudioBuffer Audio, string? Group = null);
 
 /// <summary>A predefined train/test partition of a labeled dataset.</summary>
 public sealed record DatasetSplit(IReadOnlyList<LabeledAudio> Train, IReadOnlyList<LabeledAudio> Test);

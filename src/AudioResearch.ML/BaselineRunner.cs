@@ -23,6 +23,10 @@ public sealed class BaselineReport
 
     public string SplitStrategy { get; init; } = "stratified-random";
 
+    public IReadOnlyList<string> TrainGroups { get; init; } = Array.Empty<string>();
+
+    public IReadOnlyList<string> TestGroups { get; init; } = Array.Empty<string>();
+
     public required IReadOnlyList<string> Classes { get; init; }
 
     /// <summary>Confusion matrix indexed [actualClass][predictedClass].</summary>
@@ -101,6 +105,78 @@ public static class BaselineRunner
         return Evaluate(train, test, all, featureNames, k, frac, seed, "regime-holdout");
     }
 
+    /// <summary>
+    /// Group-aware (leave-group-out) evaluation: whole groups are assigned to
+    /// either train or test, so no group (e.g. speaker) appears in both. This is
+    /// the honest way to measure generalization to unseen groups.
+    /// </summary>
+    public static BaselineReport RunGrouped(
+        IReadOnlyList<LabeledVector> samples,
+        IReadOnlyList<string> featureNames,
+        string groupName,
+        int k = 3,
+        double testFraction = 0.3,
+        int seed = 42)
+    {
+        ArgumentNullException.ThrowIfNull(samples);
+        ArgumentNullException.ThrowIfNull(featureNames);
+        if (samples.Count == 0)
+        {
+            throw new ArgumentException("Dataset must not be empty.", nameof(samples));
+        }
+
+        if (samples.Any(s => s.Group is null))
+        {
+            throw new ArgumentException("Every sample must have a Group for grouped evaluation.", nameof(samples));
+        }
+
+        if (testFraction is <= 0.0 or >= 1.0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(testFraction), "Test fraction must be in (0, 1).");
+        }
+
+        var groupSizes = samples
+            .GroupBy(s => s.Group!, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
+        if (groupSizes.Count < 2)
+        {
+            throw new ArgumentException("Grouped evaluation needs at least two distinct groups.", nameof(samples));
+        }
+
+        // Assign whole groups to the test set (seeded) until ~testFraction of the
+        // samples are held out, always leaving at least one group to train on.
+        var keys = groupSizes.Keys.OrderBy(g => g, StringComparer.Ordinal).ToList();
+        Shuffle(keys, new Random(seed));
+
+        var testGroups = new HashSet<string>(StringComparer.Ordinal);
+        int target = (int)Math.Round(samples.Count * testFraction);
+        int held = 0;
+        foreach (string key in keys)
+        {
+            if (testGroups.Count == keys.Count - 1)
+            {
+                break; // keep at least one group for training
+            }
+
+            testGroups.Add(key);
+            held += groupSizes[key];
+            if (held >= target)
+            {
+                break;
+            }
+        }
+
+        var train = samples.Where(s => !testGroups.Contains(s.Group!)).ToList();
+        var test = samples.Where(s => testGroups.Contains(s.Group!)).ToList();
+        var testGroupList = testGroups.OrderBy(g => g, StringComparer.Ordinal).ToList();
+        var trainGroupList = keys.Where(g => !testGroups.Contains(g)).OrderBy(g => g, StringComparer.Ordinal).ToList();
+
+        return Evaluate(
+            train, test, samples, featureNames, k,
+            (double)test.Count / samples.Count, seed, $"group-holdout({groupName})",
+            trainGroupList, testGroupList);
+    }
+
     private static BaselineReport Evaluate(
         IReadOnlyList<LabeledVector> train,
         IReadOnlyList<LabeledVector> test,
@@ -109,7 +185,9 @@ public static class BaselineRunner
         int k,
         double testFraction,
         int seed,
-        string splitStrategy)
+        string splitStrategy,
+        IReadOnlyList<string>? trainGroups = null,
+        IReadOnlyList<string>? testGroups = null)
     {
         var classes = all
             .Select(s => s.Label)
@@ -155,6 +233,8 @@ public static class BaselineRunner
             Seed = seed,
             Accuracy = test.Count > 0 ? (double)correct / test.Count : 0.0,
             SplitStrategy = splitStrategy,
+            TrainGroups = trainGroups ?? Array.Empty<string>(),
+            TestGroups = testGroups ?? Array.Empty<string>(),
             Classes = classes,
             Confusion = confusion,
             ClassCounts = classCounts,

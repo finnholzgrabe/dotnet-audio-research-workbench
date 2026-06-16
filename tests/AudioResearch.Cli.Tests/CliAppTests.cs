@@ -190,6 +190,46 @@ public class CliAppTests
         }
     }
 
+    [Fact]
+    public void MlBaseline_GroupBySpeaker_HoldsSpeakersOut()
+    {
+        string dir = NewTempDir();
+        try
+        {
+            string[] speakers = { "alice", "bob", "carol" };
+            for (int s = 0; s < speakers.Length; s++)
+            {
+                for (int idx = 0; idx < 6; idx++)
+                {
+                    int digit = idx % 3;
+                    string wav = Path.Combine(dir, $"{digit}_{speakers[s]}_{idx}.wav");
+                    Run("generate", "tone", "--freq", (300 + 100 * digit).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        "--seconds", "0.2", "--out", wav);
+                }
+            }
+
+            string report = Path.Combine(dir, "grouped.json");
+            (int code, string @out, _) = Run("ml", "baseline", "--dataset", dir,
+                "--labels", "digit", "--group-by", "speaker", "--out", report);
+            Assert.Equal(0, code);
+            Assert.Contains("Held-out:", @out);
+
+            using JsonDocument doc = JsonDocument.Parse(File.ReadAllText(report));
+            JsonElement root = doc.RootElement;
+            Assert.StartsWith("group-holdout(speaker)", root.GetProperty("splitStrategy").GetString());
+
+            var test = root.GetProperty("testGroups").EnumerateArray().Select(e => e.GetString()).ToHashSet();
+            var train = root.GetProperty("trainGroups").EnumerateArray().Select(e => e.GetString()).ToHashSet();
+            Assert.NotEmpty(test);
+            Assert.NotEmpty(train);
+            Assert.Empty(test.Intersect(train)); // no speaker in both splits
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
     private static string NewTempDir()
     {
         string dir = Path.Combine(Path.GetTempPath(), "audioresearch-test-" + Guid.NewGuid().ToString("N"));

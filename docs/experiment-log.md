@@ -4,6 +4,25 @@ A reproducible record of runs. Every result here is regenerable from a clean
 checkout because all randomness is seeded (the FSDD runs additionally require the
 one-off `dataset fetch fsdd` download).
 
+## 2026-06-16 — speaker-independent (leave-speakers-out) split
+
+Added a group-aware split (`ml baseline --group-by speaker`) so whole speakers are
+held out of training. This is the honest protocol for measuring whether digit
+recognition generalizes to unheard voices.
+
+| FSDD digit task | Split | Held-out speakers | Accuracy |
+| --- | --- | --- | --- |
+| `--labels digit` | random (1750/750) | — | 0.941 |
+| `--labels digit --group-by speaker` | group-holdout (1500/1000) | jackson, nicolas | **0.603** |
+
+Sanity check — `--labels speaker --group-by speaker` gives **0.000**: the held-out
+speakers are classes the model never saw, so it cannot possibly predict them. This
+confirms the group split isolates speakers with no leakage.
+
+Takeaway: the 0.941 random-split digit number was optimistic; 0.603 is the
+defensible generalization figure. The mechanism (random vs. grouped split), not a
+model change, accounts for the gap.
+
 ## 2026-06-16 — harder datasets and real audio (FSDD)
 
 Same environment as below. All runs use `seed 42` and default options unless noted.

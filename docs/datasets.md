@@ -45,10 +45,28 @@ dotnet "$DLL" ml baseline --dataset data/fsdd/recordings --labels speaker --out 
 
 # Digit classification (10 classes) for contrast
 dotnet "$DLL" ml baseline --dataset data/fsdd/recordings --labels digit --out artifacts/fsdd-digit.json
+
+# Speaker-independent digit classification (leave-speakers-out) -- the honest measure
+dotnet "$DLL" ml baseline --dataset data/fsdd/recordings --labels digit --group-by speaker
 ```
 
 The fetch command verifies the archive against the pinned SHA-256 before use and
 writes `data/fsdd/ATTRIBUTION.txt`.
+
+### Random vs. speaker-independent split
+
+A plain random split lets the same speaker land in both train and test, which
+inflates the apparent digit accuracy (0.941). With `--group-by speaker`, whole
+speakers are held out, so the model is tested on voices it never heard. That is
+the honest generalization number for digit recognition:
+
+| Split | Digit accuracy |
+| --- | --- |
+| random (`--labels digit`) | 0.941 |
+| speaker-independent (`--group-by speaker`) | 0.603 |
+
+Sanity: `--labels speaker --group-by speaker` yields 0.000 — held-out speakers are
+unseen classes, confirming the split leaks nothing.
 
 ### Licensing and handling
 

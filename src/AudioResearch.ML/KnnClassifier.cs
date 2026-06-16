@@ -1,7 +1,10 @@
 namespace AudioResearch.ML;
 
-/// <summary>A feature vector paired with its class label.</summary>
-public sealed record LabeledVector(string Label, double[] Features);
+/// <summary>
+/// A feature vector paired with its class label. <paramref name="Group"/> is an
+/// optional grouping key (e.g. speaker) for leave-group-out evaluation.
+/// </summary>
+public sealed record LabeledVector(string Label, double[] Features, string? Group = null);
 
 /// <summary>
 /// A small, dependency-free k-nearest-neighbours classifier with z-score feature

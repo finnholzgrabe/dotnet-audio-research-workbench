@@ -100,13 +100,16 @@ Reproducible accuracy across the modes (seed 42, defaults):
 | `ml baseline` (default) | noisy synthetic, overlapping + SNR 0–20 dB | 0.708 |
 | `ml baseline --split regime` | train low-freq → test high-freq | 0.825 |
 | `ml baseline --dataset data/fsdd/recordings --labels speaker` | real FSDD, 5 speakers | 0.976 |
-| `ml baseline --dataset data/fsdd/recordings --labels digit` | real FSDD, 10 digits | 0.941 |
+| `ml baseline --dataset data/fsdd/recordings --labels digit` | real FSDD, 10 digits (random split) | 0.941 |
+| `… --labels digit --group-by speaker` | real FSDD digits, **speaker-independent** | 0.603 |
 
 > The *easy* set hits 100% by construction — it shows the pipeline works. The
 > *noisy* and *regime* numbers are deliberately lower (overlapping classes, added
 > noise, train/test in different frequency bands), and the FSDD numbers come from
-> real recordings. None of this is a medically meaningful task; the value is a
-> tested, reproducible feature-to-classifier pipeline with honest evaluation.
+> real recordings. The digit accuracy drops from 0.941 to **0.603** under a
+> speaker-independent split — the honest measure once the same speaker can no
+> longer appear in both train and test. None of this is a medically meaningful
+> task; the value is a tested, reproducible pipeline with honest evaluation.
 
 ## Visualization
 

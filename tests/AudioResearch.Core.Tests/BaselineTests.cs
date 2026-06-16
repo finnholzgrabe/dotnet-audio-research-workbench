@@ -81,6 +81,50 @@ public class BaselineTests
     }
 
     [Fact]
+    public void RunGrouped_KeepsGroupsDisjointAcrossSplit()
+    {
+        var samples = new List<LabeledVector>();
+        foreach (string g in new[] { "A", "B", "C", "D" })
+        {
+            samples.Add(new LabeledVector("x", new[] { 0.0 }, g));
+            samples.Add(new LabeledVector("y", new[] { 1.0 }, g));
+        }
+
+        BaselineReport report = BaselineRunner.RunGrouped(samples, new[] { "f" }, "speaker", k: 1, testFraction: 0.3, seed: 1);
+
+        Assert.StartsWith("group-holdout(speaker)", report.SplitStrategy);
+        Assert.NotEmpty(report.TestGroups);
+        Assert.NotEmpty(report.TrainGroups);
+        Assert.Empty(report.TestGroups.Intersect(report.TrainGroups)); // disjoint
+        Assert.Equal(samples.Count, report.TrainCount + report.TestCount);
+    }
+
+    [Fact]
+    public void RunGrouped_WhenLabelEqualsGroup_CannotGeneralize()
+    {
+        // If the class IS the group (like classifying speakers leave-speaker-out),
+        // held-out classes are never seen in training -> accuracy must be 0.
+        var samples = new List<LabeledVector>();
+        foreach (string g in new[] { "alice", "bob", "carol" })
+        {
+            for (int i = 0; i < 4; i++)
+            {
+                samples.Add(new LabeledVector(g, new[] { (double)i }, g));
+            }
+        }
+
+        BaselineReport report = BaselineRunner.RunGrouped(samples, new[] { "f" }, "speaker", k: 1, testFraction: 0.34, seed: 3);
+        Assert.Equal(0.0, report.Accuracy, 9);
+    }
+
+    [Fact]
+    public void RunGrouped_ThrowsWhenGroupsMissing()
+    {
+        var samples = new List<LabeledVector> { new("x", new[] { 0.0 }), new("y", new[] { 1.0 }) };
+        Assert.Throws<ArgumentException>(() => BaselineRunner.RunGrouped(samples, new[] { "f" }, "speaker"));
+    }
+
+    [Fact]
     public void Baseline_ConfusionMatrixSumsToTestCount()
     {
         IReadOnlyList<LabeledAudio> dataset = DatasetBuilder.Build(perClass: 8, seconds: 0.4);

@@ -17,14 +17,12 @@ detailed working list. Status: ✅ done · 🔜 next · 💡 later.
 
 ## Next
 
-### 🔜 1. Speaker-independent split for the FSDD digit task
-**Why:** the current FSDD digit run uses a random split, so the same speaker
-appears in train and test — accuracy (0.941) is optimistic. A speaker-independent
-(leave-speakers-out) protocol is the honest measure of digit generalization.
-**How:** add a group-aware split keyed on the parsed speaker; in the CLI expose
-`--group-by speaker`. Reuse `BaselineRunner.RunWithSplit`.
-**Acceptance:** report records `splitStrategy: "group-holdout(speaker)"`; expect a
-visibly lower, honest digit accuracy; documented in the experiment log.
+### ✅ 1. Speaker-independent split for the FSDD digit task
+Done: `BaselineRunner.RunGrouped` (leave-group-out) + CLI `--group-by speaker`.
+The report records `splitStrategy: "group-holdout(speaker)"` plus the held-out
+groups. Honest result: FSDD digit accuracy drops from **0.941** (random, speakers
+leak) to **0.603** (speaker-independent). Sanity check: classifying *speakers*
+leave-speaker-out gives 0.000, confirming no leakage.
 
 ### ✅ 2. Visualization / reporting
 Done: `experiments/python/visualize.py` (matplotlib) renders one figure with the

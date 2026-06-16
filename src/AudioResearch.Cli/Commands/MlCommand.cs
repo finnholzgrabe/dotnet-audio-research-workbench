@@ -14,7 +14,7 @@ public static class MlCommand
     {
         if (args.Count == 0 || args[0] != "baseline")
         {
-            error.WriteLine("Usage: ml baseline [--difficulty easy|noisy] [--split random|regime] [--dataset <dir> --labels speaker|digit|auto]");
+            error.WriteLine("Usage: ml baseline [--difficulty easy|noisy] [--split random|regime] [--dataset <dir> --labels speaker|digit|auto [--group-by speaker|digit]]");
             error.WriteLine("                  [--snr-min dB] [--snr-max dB] [--out <path>] [--per-class N] [--k N] [--test-fraction F] [--seed N]");
             return 2;
         }
@@ -39,13 +39,22 @@ public static class MlCommand
         int sampleCount;
 
         string labelScheme = (opts.GetString("labels") ?? "auto").ToLowerInvariant();
-        if (datasetDir is not null && TryLoadFromDirectory(datasetDir, labelScheme, out var loaded) && loaded.Count > 0)
+        string groupScheme = (opts.GetString("group-by") ?? "none").ToLowerInvariant();
+        if (datasetDir is not null && TryLoadFromDirectory(datasetDir, labelScheme, groupScheme, out var loaded) && loaded.Count > 0)
         {
-            // A directory of WAVs: always a random split.
             var vectors = ToVectors(loaded, out featureNames);
             sampleCount = vectors.Count;
-            datasetSource = $"directory:{datasetDir} (labels={labelScheme})";
-            report = BaselineRunner.Run(vectors, featureNames, k, testFraction, seed);
+            if (groupScheme != "none")
+            {
+                // Leave-group-out: no group (e.g. speaker) appears in both splits.
+                datasetSource = $"directory:{datasetDir} (labels={labelScheme}, group-by={groupScheme})";
+                report = BaselineRunner.RunGrouped(vectors, featureNames, groupScheme, k, testFraction, seed);
+            }
+            else
+            {
+                datasetSource = $"directory:{datasetDir} (labels={labelScheme})";
+                report = BaselineRunner.Run(vectors, featureNames, k, testFraction, seed);
+            }
         }
         else if (difficulty == "noisy" && split == "regime")
         {
@@ -78,6 +87,10 @@ public static class MlCommand
         @out.WriteLine($"Dataset:   {datasetSource}, {sampleCount} samples, {report.Classes.Count} classes");
         @out.WriteLine($"Model:     {report.ModelType}, k={report.K}");
         @out.WriteLine($"Split:     {report.TrainCount} train / {report.TestCount} test ({report.SplitStrategy}, seed {report.Seed})");
+        if (report.TestGroups.Count > 0)
+        {
+            @out.WriteLine($"Held-out:  {string.Join(", ", report.TestGroups)} (train: {string.Join(", ", report.TrainGroups)})");
+        }
         if (report.TestCount == 0)
         {
             error.WriteLine("Warning: too few samples per class to form a held-out test set; no accuracy reported.");
@@ -101,14 +114,14 @@ public static class MlCommand
         {
             FeatureSummary summary = FeatureExtractor.Summarize(item.Audio);
             names ??= summary.Names;
-            vectors.Add(new LabeledVector(item.Label, summary.Vector));
+            vectors.Add(new LabeledVector(item.Label, summary.Vector, item.Group));
         }
 
         featureNames = names ?? Array.Empty<string>();
         return vectors;
     }
 
-    private static bool TryLoadFromDirectory(string dir, string labelScheme, out List<LabeledAudio> samples)
+    private static bool TryLoadFromDirectory(string dir, string labelScheme, string groupScheme, out List<LabeledAudio> samples)
     {
         samples = new List<LabeledAudio>();
         if (!Directory.Exists(dir))
@@ -118,13 +131,15 @@ public static class MlCommand
 
         foreach (string file in Directory.EnumerateFiles(dir, "*.wav").OrderBy(f => f, StringComparer.Ordinal))
         {
-            string? label = InferLabel(Path.GetFileNameWithoutExtension(file), labelScheme);
+            string name = Path.GetFileNameWithoutExtension(file);
+            string? label = InferLabel(name, labelScheme);
             if (label is null)
             {
                 continue;
             }
 
-            samples.Add(new LabeledAudio(label, WavFile.Read(file)));
+            string? group = groupScheme == "none" ? null : InferLabel(name, groupScheme);
+            samples.Add(new LabeledAudio(label, WavFile.Read(file), group));
         }
 
         return true;
@@ -190,11 +205,25 @@ public static class MlCommand
             classes.Add(c);
         }
 
+        var testGroups = new JsonArray();
+        foreach (string g in report.TestGroups)
+        {
+            testGroups.Add(g);
+        }
+
+        var trainGroups = new JsonArray();
+        foreach (string g in report.TrainGroups)
+        {
+            trainGroups.Add(g);
+        }
+
         var root = new JsonObject
         {
             ["schemaVersion"] = 1,
             ["datasetSource"] = datasetSource,
             ["splitStrategy"] = report.SplitStrategy,
+            ["trainGroups"] = trainGroups,
+            ["testGroups"] = testGroups,
             ["classes"] = classes,
             ["classCounts"] = classCounts,
             ["modelType"] = report.ModelType,
