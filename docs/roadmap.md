@@ -51,7 +51,10 @@ misclassification case).
 - ✅ 7. ONNX seam (no runtime dep): `IFeatureClassifier` abstraction implemented by
   `KnnClassifier`; an ONNX-backed model can implement the same interface. See
   [onnx.md](onnx.md). The native runtime stays optional/unbundled.
-- 💡 8. Microphone capture abstraction (strictly opt-in, no upload, documented).
+- ✅ 8. Capture abstraction: `IAudioCaptureSource` with offline `SyntheticCaptureSource`
+  and `WavFileCaptureSource`, plus a `capture` CLI command. Real microphone capture
+  is opt-in and intentionally not bundled (platform-specific) — `capture --source mic`
+  refuses with guidance to implement the interface in an optional project.
 - 💡 9. More datasets via the documented fetch pattern (e.g. ESC-10, CC BY) with
   resampling to a common rate.
 - ✅ 10. GitHub Pages demo: static `site/index.html` showcasing the visualization,

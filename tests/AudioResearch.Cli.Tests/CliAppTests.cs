@@ -231,6 +231,33 @@ public class CliAppTests
     }
 
     [Fact]
+    public void Capture_Synthetic_WritesWav()
+    {
+        string dir = NewTempDir();
+        try
+        {
+            string wav = Path.Combine(dir, "cap.wav");
+            (int code, string @out, _) = Run("capture", "--source", "synthetic", "--kind", "tone",
+                "--seconds", "0.3", "--out", wav);
+            Assert.Equal(0, code);
+            Assert.Contains("synthetic:tone", @out);
+            Assert.True(File.Exists(wav));
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
+    public void Capture_Mic_IsNotBundled()
+    {
+        (int code, _, string err) = Run("capture", "--source", "mic");
+        Assert.Equal(1, code);
+        Assert.Contains("not bundled", err);
+    }
+
+    [Fact]
     public void Benchmark_WritesReportWithStableSchema()
     {
         string dir = NewTempDir();

@@ -36,6 +36,8 @@ public static class CliApp
                     return DatasetCommand.Run(rest, @out, error);
                 case "generate":
                     return GenerateCommand.Run(rest, @out, error);
+                case "capture":
+                    return CaptureCommand.Run(rest, @out, error);
                 case "inspect":
                     return InspectCommand.Run(rest, @out, error);
                 case "features":
@@ -78,6 +80,7 @@ public static class CliApp
         @out.WriteLine("  generate chirp                Generate a linear-sweep WAV.");
         @out.WriteLine("  generate am                   Generate an amplitude-modulated WAV.");
         @out.WriteLine("  dataset fetch fsdd            Download the Free Spoken Digit Dataset (CC BY-SA 4.0).");
+        @out.WriteLine("  capture                       Acquire audio (synthetic|file source) to a WAV.");
         @out.WriteLine("  inspect <wav>                 Report sample rate, channels, duration, peak.");
         @out.WriteLine("  features bands <wav>          Write per-frame cochlear band energies (CSV).");
         @out.WriteLine("  features summary <wav>        Write a feature summary (JSON).");

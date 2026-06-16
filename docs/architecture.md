@@ -25,6 +25,10 @@ machinery.
     stream-based with `leaveOpen` so callers own stream lifetime.
   - `AudioAugment` — deterministic controlled-SNR additive noise (white/pink),
     gain, DC offset, and clipping, used to build harder datasets.
+  - `IAudioCaptureSource` (+ `SyntheticCaptureSource`, `WavFileCaptureSource`) —
+    the opt-in seam for audio acquisition. Real microphone capture is
+    platform-specific and intentionally not bundled; implement the interface in a
+    separate optional project to add it.
 - `AudioResearch.Core.Dsp`
   - `Windows.Hann` (periodic), `Framing` (overlapping frames + window apply),
     `Fourier` (self-contained radix-2 FFT, magnitude spectrum, bin frequency),
