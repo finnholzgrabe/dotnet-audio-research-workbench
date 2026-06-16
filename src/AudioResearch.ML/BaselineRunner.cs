@@ -1,5 +1,8 @@
 namespace AudioResearch.ML;
 
+/// <summary>Precision, recall, F1, and support (test-set count) for one class.</summary>
+public sealed record ClassMetrics(string Label, double Precision, double Recall, double F1, int Support);
+
 /// <summary>Per-class precision/recall counts and the overall accuracy of a run.</summary>
 public sealed class BaselineReport
 {
@@ -20,6 +23,12 @@ public sealed class BaselineReport
     public required int Seed { get; init; }
 
     public required double Accuracy { get; init; }
+
+    /// <summary>Unweighted mean of per-class F1 scores.</summary>
+    public double MacroF1 { get; init; }
+
+    /// <summary>Per-class precision/recall/F1/support, ordered like <see cref="Classes"/>.</summary>
+    public IReadOnlyList<ClassMetrics> PerClass { get; init; } = Array.Empty<ClassMetrics>();
 
     public string SplitStrategy { get; init; } = "stratified-random";
 
@@ -221,6 +230,28 @@ public static class BaselineRunner
             .OrderBy(g => g.Key, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
 
+        // Per-class precision/recall/F1 derived from the confusion matrix.
+        var perClass = new ClassMetrics[classes.Count];
+        double f1Sum = 0.0;
+        for (int i = 0; i < classes.Count; i++)
+        {
+            int tp = confusion[i][i];
+            int rowSum = confusion[i].Sum();              // actual class i
+            int colSum = 0;                               // predicted class i
+            for (int r = 0; r < classes.Count; r++)
+            {
+                colSum += confusion[r][i];
+            }
+
+            double precision = colSum > 0 ? (double)tp / colSum : 0.0;
+            double recall = rowSum > 0 ? (double)tp / rowSum : 0.0;
+            double f1 = (precision + recall) > 0 ? 2 * precision * recall / (precision + recall) : 0.0;
+            perClass[i] = new ClassMetrics(classes[i], precision, recall, f1, rowSum);
+            f1Sum += f1;
+        }
+
+        double macroF1 = classes.Count > 0 ? f1Sum / classes.Count : 0.0;
+
         return new BaselineReport
         {
             ModelType = "k-nearest-neighbours (z-score standardized, Euclidean)",
@@ -232,6 +263,8 @@ public static class BaselineRunner
             TestFraction = testFraction,
             Seed = seed,
             Accuracy = test.Count > 0 ? (double)correct / test.Count : 0.0,
+            MacroF1 = macroF1,
+            PerClass = perClass,
             SplitStrategy = splitStrategy,
             TrainGroups = trainGroups ?? Array.Empty<string>(),
             TestGroups = testGroups ?? Array.Empty<string>(),

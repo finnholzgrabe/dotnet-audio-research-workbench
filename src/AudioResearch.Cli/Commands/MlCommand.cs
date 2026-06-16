@@ -98,7 +98,9 @@ public static class MlCommand
         }
         else
         {
-            @out.WriteLine(string.Create(CultureInfo.InvariantCulture, $"Accuracy:  {report.Accuracy:0.000} on the held-out test set"));
+            @out.WriteLine(string.Create(CultureInfo.InvariantCulture, $"Accuracy:  {report.Accuracy:0.000} (macro-F1 {report.MacroF1:0.000}) on the held-out test set"));
+            @out.WriteLine("Per class: " + string.Join("  ", report.PerClass.Select(m =>
+                string.Create(CultureInfo.InvariantCulture, $"{m.Label}(P{m.Precision:0.00}/R{m.Recall:0.00}/F{m.F1:0.00},n={m.Support})"))));
         }
 
         @out.WriteLine($"Report:    {outPath}");
@@ -217,6 +219,18 @@ public static class MlCommand
             trainGroups.Add(g);
         }
 
+        var perClass = new JsonObject();
+        foreach (ClassMetrics m in report.PerClass)
+        {
+            perClass[m.Label] = new JsonObject
+            {
+                ["precision"] = Math.Round(m.Precision, 6, MidpointRounding.AwayFromZero),
+                ["recall"] = Math.Round(m.Recall, 6, MidpointRounding.AwayFromZero),
+                ["f1"] = Math.Round(m.F1, 6, MidpointRounding.AwayFromZero),
+                ["support"] = m.Support,
+            };
+        }
+
         var root = new JsonObject
         {
             ["schemaVersion"] = 1,
@@ -235,6 +249,8 @@ public static class MlCommand
             ["testFraction"] = report.TestFraction,
             ["seed"] = report.Seed,
             ["accuracy"] = Math.Round(report.Accuracy, 6, MidpointRounding.AwayFromZero),
+            ["macroF1"] = Math.Round(report.MacroF1, 6, MidpointRounding.AwayFromZero),
+            ["perClass"] = perClass,
             ["confusionMatrix"] = confusion,
             ["disclaimer"] = "Toy baseline on synthetic audio for engineering evidence only. Not a medical or production model.",
         };

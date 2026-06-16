@@ -81,6 +81,57 @@ public class BaselineTests
     }
 
     [Fact]
+    public void PerClassMetrics_ComputedFromConfusion()
+    {
+        // Two well-separated clusters -> perfect classification; every class scores
+        // precision = recall = F1 = 1 and macro-F1 = 1.
+        var train = new List<LabeledVector>
+        {
+            new("a", new[] { 0.0, 0.0 }), new("a", new[] { 0.1, 0.0 }),
+            new("b", new[] { 9.0, 9.0 }), new("b", new[] { 9.1, 9.0 }),
+        };
+        var test = new List<LabeledVector> { new("a", new[] { 0.2, 0.0 }), new("b", new[] { 8.9, 9.0 }) };
+
+        BaselineReport r = BaselineRunner.RunWithSplit(train, test, new[] { "f1", "f2" }, k: 1);
+
+        Assert.Equal(1.0, r.MacroF1, 9);
+        Assert.Equal(2, r.PerClass.Count);
+        foreach (ClassMetrics m in r.PerClass)
+        {
+            Assert.Equal(1.0, m.Precision, 9);
+            Assert.Equal(1.0, m.Recall, 9);
+            Assert.Equal(1.0, m.F1, 9);
+            Assert.Equal(1, m.Support);
+        }
+    }
+
+    [Fact]
+    public void PerClassMetrics_HandleMisclassification()
+    {
+        // Train two classes; feed a "b" point that sits on the "a" cluster so it is
+        // misclassified. Then: a has recall 1 but precision 0.5; b has recall 0.
+        var train = new List<LabeledVector>
+        {
+            new("a", new[] { 0.0 }), new("a", new[] { 0.1 }),
+            new("b", new[] { 9.0 }), new("b", new[] { 9.1 }),
+        };
+        var test = new List<LabeledVector>
+        {
+            new("a", new[] { 0.05 }),  // -> a (correct)
+            new("b", new[] { 0.05 }),  // -> a (wrong)
+        };
+
+        BaselineReport r = BaselineRunner.RunWithSplit(train, test, new[] { "f" }, k: 1);
+        ClassMetrics a = r.PerClass.Single(m => m.Label == "a");
+        ClassMetrics b = r.PerClass.Single(m => m.Label == "b");
+
+        Assert.Equal(1.0, a.Recall, 9);
+        Assert.Equal(0.5, a.Precision, 9);
+        Assert.Equal(0.0, b.Recall, 9);
+        Assert.Equal(0.5, r.Accuracy, 9);
+    }
+
+    [Fact]
     public void RunGrouped_KeepsGroupsDisjointAcrossSplit()
     {
         var samples = new List<LabeledVector>();

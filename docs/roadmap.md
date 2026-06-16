@@ -32,10 +32,10 @@ artifacts. Showcased in the README (`docs/images/overview.png`).
 **Remaining:** publish it via GitHub Pages (see item 10), and optionally add a
 .NET-native SVG export so no Python is required.
 
-### 🔜 3. Per-class metrics in the report
-**Why:** accuracy alone hides class imbalance/confusions.
-**How:** add precision/recall/F1 per class to `BaselineReport` and the JSON.
-**Acceptance:** report includes per-class metrics; covered by a test.
+### ✅ 3. Per-class metrics in the report
+Done: `BaselineReport` carries per-class precision/recall/F1/support and macro-F1,
+shown in the console and JSON. Covered by tests (perfect-separation and a forced
+misclassification case).
 
 ## Later
 
