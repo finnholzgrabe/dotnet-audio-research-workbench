@@ -21,6 +21,8 @@ public sealed class BaselineReport
 
     public required double Accuracy { get; init; }
 
+    public string SplitStrategy { get; init; } = "stratified-random";
+
     public required IReadOnlyList<string> Classes { get; init; }
 
     /// <summary>Confusion matrix indexed [actualClass][predictedClass].</summary>
@@ -72,7 +74,44 @@ public static class BaselineRunner
             }
         }
 
-        var classes = samples
+        return Evaluate(train, test, samples, featureNames, k, testFraction, seed, "stratified-random");
+    }
+
+    /// <summary>
+    /// Evaluates the baseline on an explicit, predefined train/test split (e.g. a
+    /// frequency-regime holdout for measuring generalization). No internal split.
+    /// </summary>
+    public static BaselineReport RunWithSplit(
+        IReadOnlyList<LabeledVector> train,
+        IReadOnlyList<LabeledVector> test,
+        IReadOnlyList<string> featureNames,
+        int k = 3,
+        int seed = 0)
+    {
+        ArgumentNullException.ThrowIfNull(train);
+        ArgumentNullException.ThrowIfNull(test);
+        ArgumentNullException.ThrowIfNull(featureNames);
+        if (train.Count == 0)
+        {
+            throw new ArgumentException("Training set must not be empty.", nameof(train));
+        }
+
+        var all = train.Concat(test).ToList();
+        double frac = all.Count > 0 ? (double)test.Count / all.Count : 0.0;
+        return Evaluate(train, test, all, featureNames, k, frac, seed, "regime-holdout");
+    }
+
+    private static BaselineReport Evaluate(
+        IReadOnlyList<LabeledVector> train,
+        IReadOnlyList<LabeledVector> test,
+        IReadOnlyList<LabeledVector> all,
+        IReadOnlyList<string> featureNames,
+        int k,
+        double testFraction,
+        int seed,
+        string splitStrategy)
+    {
+        var classes = all
             .Select(s => s.Label)
             .Distinct(StringComparer.Ordinal)
             .OrderBy(s => s, StringComparer.Ordinal)
@@ -99,7 +138,7 @@ public static class BaselineRunner
             }
         }
 
-        var classCounts = samples
+        var classCounts = all
             .GroupBy(s => s.Label, StringComparer.Ordinal)
             .OrderBy(g => g.Key, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
@@ -115,6 +154,7 @@ public static class BaselineRunner
             TestFraction = testFraction,
             Seed = seed,
             Accuracy = test.Count > 0 ? (double)correct / test.Count : 0.0,
+            SplitStrategy = splitStrategy,
             Classes = classes,
             Confusion = confusion,
             ClassCounts = classCounts,

@@ -1,7 +1,36 @@
 # Experiment Log
 
 A reproducible record of runs. Every result here is regenerable from a clean
-checkout because all randomness is seeded.
+checkout because all randomness is seeded (the FSDD runs additionally require the
+one-off `dataset fetch fsdd` download).
+
+## 2026-06-16 — harder datasets and real audio (FSDD)
+
+Same environment as below. All runs use `seed 42` and default options unless noted.
+
+| Run | Dataset | Split | Accuracy |
+| --- | --- | --- | --- |
+| `ml baseline --difficulty easy` | separable synthetic | stratified-random | 1.000 |
+| `ml baseline` (default) | noisy synthetic (overlap + SNR 0–20 dB) | stratified-random | 0.708 |
+| `ml baseline --split regime` | noisy synthetic | low→high freq holdout | 0.825 |
+| `ml baseline --dataset data/fsdd/recordings --labels speaker` | FSDD (real, 5 speakers, 2500 clips) | stratified-random (1750/750) | 0.976 |
+| `ml baseline --dataset data/fsdd/recordings --labels digit` | FSDD (real, 10 digits) | stratified-random | 0.941 |
+
+Interpretation:
+
+- The drop from 1.000 (easy) to **0.708** (noisy) and **0.825** (regime holdout)
+  is the point: overlapping classes, added noise, and a train/test split across
+  *different frequency bands* make the task genuinely non-trivial, so the number
+  is informative rather than decorative.
+- **FSDD** is real recorded speech (CC BY-SA 4.0, pinned release `v1.0.9`, 8 kHz
+  mono). Speaker identity is well captured by the spectral-envelope features
+  (0.976); digit identity less so relative to dedicated speech features, but a
+  simple k-NN over 53 generic features still reaches 0.941 on this clean corpus.
+- FSDD uses a random split, so speakers appear in both train and test; this is a
+  standard split, not a speaker-independent protocol. See
+  [datasets.md](datasets.md) for license and handling.
+
+## 2026-06-16 — v0.1 baseline on synthetic audio
 
 ## 2026-06-16 — v0.1 baseline on synthetic audio
 

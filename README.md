@@ -11,8 +11,12 @@ toy ML baseline.
 - A transparent DSP pipeline: synthetic audio generation, WAV IO, framing,
   Hann windowing, a dependency-free radix-2 FFT/STFT, band energies, and a
   cochlear-inspired (ERB-spaced) triangular filter bank.
-- A tiny, reproducible machine-learning baseline that classifies generated
-  fixtures (tone / sweep / noise / modulated) from extracted features.
+- A tiny, reproducible machine-learning baseline (k-NN) over extracted features,
+  with three dataset modes: trivially-separable, a harder *noisy* synthetic set
+  (overlapping classes + controlled SNR), and a frequency-regime generalization
+  split.
+- An optional real-data workflow: download the **Free Spoken Digit Dataset**
+  (CC BY-SA 4.0) and run speaker/digit classification.
 - Deterministic outputs (CSV features, JSON summaries, JSON experiment reports)
   suitable for examples, tests, and CI.
 
@@ -57,8 +61,15 @@ dotnet "$DLL" inspect samples/generated/tone_440hz.wav
 dotnet "$DLL" features bands   samples/generated/tone_440hz.wav --out artifacts/tone-bands.csv
 dotnet "$DLL" features summary samples/generated/tone_440hz.wav --out artifacts/tone-summary.json
 
-# 4. Run the toy ML baseline (uses a deterministic in-memory dataset)
+# 4. Run the ML baseline (default: harder "noisy" synthetic dataset)
 dotnet "$DLL" ml baseline --out artifacts/baseline-report.json
+```
+
+Optional: run the baseline on **real** audio (Free Spoken Digit Dataset):
+
+```sh
+dotnet "$DLL" dataset fetch fsdd                                  # ~12 MB, CC BY-SA 4.0, git-ignored
+dotnet "$DLL" ml baseline --dataset data/fsdd/recordings --labels speaker
 ```
 
 Example `inspect` output:
@@ -72,18 +83,30 @@ Duration:     1 s
 Peak:         0.8 (-1.9 dBFS)
 ```
 
-Example `ml baseline` output:
+Example `ml baseline` output (default noisy dataset):
 
 ```text
-Dataset:   synthetic (deterministic), 48 samples, 4 classes
+Dataset:   synthetic noisy, SNR 0..20 dB, 80 samples, 4 classes
 Model:     k-nearest-neighbours (z-score standardized, Euclidean), k=3
-Split:     32 train / 16 test (seed 42)
-Accuracy:  1.000 on the held-out test set
+Split:     56 train / 24 test (stratified-random, seed 42)
+Accuracy:  0.708 on the held-out test set
 ```
 
-> The baseline reaches high accuracy because the four synthetic classes are
-> deliberately well-separated. This demonstrates a working, tested
-> feature-to-classifier pipeline — **not** a hard or medically meaningful task.
+Reproducible accuracy across the modes (seed 42, defaults):
+
+| Command | Task | Accuracy |
+| --- | --- | --- |
+| `ml baseline --difficulty easy` | separable synthetic (4 classes) | 1.000 |
+| `ml baseline` (default) | noisy synthetic, overlapping + SNR 0–20 dB | 0.708 |
+| `ml baseline --split regime` | train low-freq → test high-freq | 0.825 |
+| `ml baseline --dataset data/fsdd/recordings --labels speaker` | real FSDD, 5 speakers | 0.976 |
+| `ml baseline --dataset data/fsdd/recordings --labels digit` | real FSDD, 10 digits | 0.941 |
+
+> The *easy* set hits 100% by construction — it shows the pipeline works. The
+> *noisy* and *regime* numbers are deliberately lower (overlapping classes, added
+> noise, train/test in different frequency bands), and the FSDD numbers come from
+> real recordings. None of this is a medically meaningful task; the value is a
+> tested, reproducible feature-to-classifier pipeline with honest evaluation.
 
 ## Architecture
 
@@ -109,18 +132,23 @@ explicitly passed streams/paths. The CLI owns all user-facing IO and exit codes
 dotnet test AudioResearch.sln
 ```
 
-33 deterministic tests cover WAV round-tripping, generator determinism, framing
-and window endpoints, FFT correctness (impulse → flat spectrum, sine → expected
-bin), band-energy concentration, feature-schema stability, and the ML baseline's
-accuracy and determinism.
+48 deterministic tests cover WAV round-tripping, generator determinism, framing
+and window endpoints, **golden DSP facts** (Parseval's theorem, bin-aligned sine
+amplitude `A·N/2`, ERB filter-bank partition-of-unity, FFT inverse round-trip),
+band-energy concentration, feature-schema stability, noise/augmentation SNR
+correctness, and the ML baseline's accuracy and determinism. The FSDD filename
+label parsing is covered offline; the network download itself is not exercised in
+CI.
 
 ## Roadmap
 
 Implemented in **v0.1** (this milestone): synthetic generators, WAV IO, DSP
-primitives, cochlear-inspired features, CSV/JSON export, and the k-NN baseline.
+primitives, cochlear-inspired features, CSV/JSON export, the k-NN baseline, a
+harder noisy dataset + regime generalization split, and an optional real-dataset
+workflow (FSDD fetch + speaker/digit classification).
 
-Candidate **v0.2** work: microphone capture abstraction (opt-in), optional real
-dataset workflow, plots, ONNX inference, a benchmark command, and a GitHub Pages
+Candidate **v0.2** work: microphone capture abstraction (opt-in), plots, ONNX
+inference, a benchmark command, and a GitHub Pages
 demo. These are not implemented yet and are not claimed.
 
 ## Medical disclaimer

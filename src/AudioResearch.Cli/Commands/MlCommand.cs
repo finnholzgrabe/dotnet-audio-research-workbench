@@ -14,53 +14,70 @@ public static class MlCommand
     {
         if (args.Count == 0 || args[0] != "baseline")
         {
-            error.WriteLine("Usage: ml baseline [--dataset <dir>] [--out <path>] [--per-class N] [--k N] [--test-fraction F] [--seed N]");
+            error.WriteLine("Usage: ml baseline [--difficulty easy|noisy] [--split random|regime] [--dataset <dir> --labels speaker|digit|auto]");
+            error.WriteLine("                  [--snr-min dB] [--snr-max dB] [--out <path>] [--per-class N] [--k N] [--test-fraction F] [--seed N]");
             return 2;
         }
 
         Options opts = Options.Parse(args.Skip(1).ToArray());
-        int perClass = opts.GetInt("per-class", 12);
+        int perClass = opts.GetInt("per-class", 20);
         int k = opts.GetInt("k", 3);
         double testFraction = opts.GetDouble("test-fraction", 0.3);
         int seed = opts.GetInt("seed", 42);
         double seconds = opts.GetDouble("seconds", 0.5);
         int rate = opts.GetInt("rate", 16000);
+        double snrMin = opts.GetDouble("snr-min", 0.0);
+        double snrMax = opts.GetDouble("snr-max", 20.0);
+        string difficulty = (opts.GetString("difficulty") ?? "noisy").ToLowerInvariant();
+        string split = (opts.GetString("split") ?? "random").ToLowerInvariant();
         string outPath = opts.GetString("out") ?? Path.Combine("artifacts", "baseline-report.json");
         string? datasetDir = opts.GetString("dataset");
 
-        // Source the labeled audio: from a directory of WAVs if given and usable,
-        // otherwise from the deterministic in-memory synthetic dataset.
         string datasetSource;
-        IReadOnlyList<LabeledAudio> dataset;
-        if (datasetDir is not null && TryLoadFromDirectory(datasetDir, out var loaded) && loaded.Count > 0)
+        BaselineReport report;
+        IReadOnlyList<string> featureNames;
+        int sampleCount;
+
+        string labelScheme = (opts.GetString("labels") ?? "auto").ToLowerInvariant();
+        if (datasetDir is not null && TryLoadFromDirectory(datasetDir, labelScheme, out var loaded) && loaded.Count > 0)
         {
-            dataset = loaded;
-            datasetSource = $"directory:{datasetDir}";
+            // A directory of WAVs: always a random split.
+            var vectors = ToVectors(loaded, out featureNames);
+            sampleCount = vectors.Count;
+            datasetSource = $"directory:{datasetDir} (labels={labelScheme})";
+            report = BaselineRunner.Run(vectors, featureNames, k, testFraction, seed);
+        }
+        else if (difficulty == "noisy" && split == "regime")
+        {
+            // Generalization: train on a low-frequency regime, test on a disjoint high one.
+            DatasetSplit ds = DatasetBuilder.BuildGeneralizationSplit(
+                perClassTrain: perClass, perClassTest: Math.Max(4, perClass / 2),
+                seconds: seconds, sampleRate: rate, seed: seed);
+            var train = ToVectors(ds.Train, out featureNames);
+            var test = ToVectors(ds.Test, out _);
+            sampleCount = train.Count + test.Count;
+            datasetSource = $"synthetic noisy, regime-holdout (low->high freq)";
+            report = BaselineRunner.RunWithSplit(train, test, featureNames, k, seed);
         }
         else
         {
-            dataset = DatasetBuilder.Build(perClass, seconds, rate);
-            datasetSource = "synthetic (deterministic)";
+            // easy = trivially separable; noisy = overlapping params + SNR variation.
+            IReadOnlyList<LabeledAudio> dataset = difficulty == "easy"
+                ? DatasetBuilder.Build(perClass, seconds, rate)
+                : DatasetBuilder.BuildVaried(perClass, seconds, rate, snrMin, snrMax, seed);
+            var vectors = ToVectors(dataset, out featureNames);
+            sampleCount = vectors.Count;
+            datasetSource = difficulty == "easy"
+                ? "synthetic easy (separable)"
+                : string.Create(CultureInfo.InvariantCulture, $"synthetic noisy, SNR {snrMin:0}..{snrMax:0} dB");
+            report = BaselineRunner.Run(vectors, featureNames, k, testFraction, seed);
         }
-
-        // Extract a summary feature vector per sample.
-        var vectors = new List<LabeledVector>(dataset.Count);
-        IReadOnlyList<string>? featureNames = null;
-        foreach (LabeledAudio item in dataset)
-        {
-            FeatureSummary summary = FeatureExtractor.Summarize(item.Audio);
-            featureNames ??= summary.Names;
-            vectors.Add(new LabeledVector(item.Label, summary.Vector));
-        }
-
-        featureNames ??= Array.Empty<string>();
-        BaselineReport report = BaselineRunner.Run(vectors, featureNames, k, testFraction, seed);
 
         WriteReport(report, datasetSource, outPath);
 
-        @out.WriteLine($"Dataset:   {datasetSource}, {vectors.Count} samples, {report.Classes.Count} classes");
+        @out.WriteLine($"Dataset:   {datasetSource}, {sampleCount} samples, {report.Classes.Count} classes");
         @out.WriteLine($"Model:     {report.ModelType}, k={report.K}");
-        @out.WriteLine($"Split:     {report.TrainCount} train / {report.TestCount} test (seed {report.Seed})");
+        @out.WriteLine($"Split:     {report.TrainCount} train / {report.TestCount} test ({report.SplitStrategy}, seed {report.Seed})");
         if (report.TestCount == 0)
         {
             error.WriteLine("Warning: too few samples per class to form a held-out test set; no accuracy reported.");
@@ -72,11 +89,26 @@ public static class MlCommand
         }
 
         @out.WriteLine($"Report:    {outPath}");
-        @out.WriteLine("Note: a toy baseline on synthetic audio for engineering evidence, not a medical or production model.");
+        @out.WriteLine("Note: a small k-NN baseline with simple spectral features; engineering evidence, not a medical or production model.");
         return 0;
     }
 
-    private static bool TryLoadFromDirectory(string dir, out List<LabeledAudio> samples)
+    private static List<LabeledVector> ToVectors(IReadOnlyList<LabeledAudio> dataset, out IReadOnlyList<string> featureNames)
+    {
+        var vectors = new List<LabeledVector>(dataset.Count);
+        IReadOnlyList<string>? names = null;
+        foreach (LabeledAudio item in dataset)
+        {
+            FeatureSummary summary = FeatureExtractor.Summarize(item.Audio);
+            names ??= summary.Names;
+            vectors.Add(new LabeledVector(item.Label, summary.Vector));
+        }
+
+        featureNames = names ?? Array.Empty<string>();
+        return vectors;
+    }
+
+    private static bool TryLoadFromDirectory(string dir, string labelScheme, out List<LabeledAudio> samples)
     {
         samples = new List<LabeledAudio>();
         if (!Directory.Exists(dir))
@@ -86,7 +118,7 @@ public static class MlCommand
 
         foreach (string file in Directory.EnumerateFiles(dir, "*.wav").OrderBy(f => f, StringComparer.Ordinal))
         {
-            string? label = InferLabel(Path.GetFileNameWithoutExtension(file));
+            string? label = InferLabel(Path.GetFileNameWithoutExtension(file), labelScheme);
             if (label is null)
             {
                 continue;
@@ -98,14 +130,32 @@ public static class MlCommand
         return true;
     }
 
-    private static string? InferLabel(string name)
+    /// <summary>
+    /// Infers a class label from a WAV filename. FSDD files are named
+    /// <c>{digit}_{speaker}_{index}.wav</c> (e.g. <c>7_jackson_32.wav</c>); the
+    /// "speaker" / "digit" schemes parse those. "auto" uses signal-type keywords.
+    /// </summary>
+    internal static string? InferLabel(string name, string labelScheme)
     {
-        string lower = name.ToLowerInvariant();
-        if (lower.Contains("tone") || lower.Contains("sine")) return "tone";
-        if (lower.Contains("sweep") || lower.Contains("chirp")) return "sweep";
-        if (lower.Contains("noise")) return "noise";
-        if (lower.Contains("modul") || lower.Contains("_am") || lower.StartsWith("am")) return "modulated";
-        return null;
+        switch (labelScheme)
+        {
+            case "speaker":
+            case "digit":
+                string[] parts = name.Split('_');
+                if (parts.Length < 3)
+                {
+                    return null;
+                }
+
+                return labelScheme == "digit" ? parts[0] : parts[1];
+            default:
+                string lower = name.ToLowerInvariant();
+                if (lower.Contains("tone") || lower.Contains("sine")) return "tone";
+                if (lower.Contains("sweep") || lower.Contains("chirp")) return "sweep";
+                if (lower.Contains("noise")) return "noise";
+                if (lower.Contains("modul") || lower.Contains("_am") || lower.StartsWith("am")) return "modulated";
+                return null;
+        }
     }
 
     private static void WriteReport(BaselineReport report, string datasetSource, string outPath)
@@ -144,6 +194,7 @@ public static class MlCommand
         {
             ["schemaVersion"] = 1,
             ["datasetSource"] = datasetSource,
+            ["splitStrategy"] = report.SplitStrategy,
             ["classes"] = classes,
             ["classCounts"] = classCounts,
             ["modelType"] = report.ModelType,

@@ -1,3 +1,4 @@
+using AudioResearch.Core.Audio;
 using AudioResearch.Core.Experiments;
 using AudioResearch.Core.Features;
 using AudioResearch.ML;
@@ -45,6 +46,38 @@ public class BaselineTests
         Assert.Equal(4, r1.Classes.Count);
         Assert.True(r1.TrainCount > r1.TestCount);
         Assert.True(r1.Accuracy >= 0.75, $"accuracy was {r1.Accuracy}");
+    }
+
+    [Fact]
+    public void NoisyBaseline_IsHarderThanEasy_AndAboveChance()
+    {
+        var noisy = DatasetBuilder.BuildVaried(perClass: 20, seconds: 0.4, minSnrDb: 0, maxSnrDb: 12, seed: 7)
+            .Select(d => new LabeledVector(d.Label, FeatureExtractor.Summarize(d.Audio).Vector))
+            .ToList();
+        IReadOnlyList<string> names = FeatureExtractor.Summarize(SignalGenerator.Sine(440, 0.4, 16000)).Names;
+
+        BaselineReport report = BaselineRunner.Run(noisy, names, k: 3, testFraction: 0.3, seed: 42);
+
+        // Well above the 0.25 chance level, but the overlapping/noisy classes make
+        // it genuinely harder than the trivially-separable easy dataset.
+        Assert.True(report.Accuracy > 0.4, $"accuracy was {report.Accuracy}");
+        Assert.True(report.Accuracy < 1.0, $"noisy task should not be perfectly separable, was {report.Accuracy}");
+    }
+
+    [Fact]
+    public void RegimeSplit_RunsAndReportsHoldoutStrategy()
+    {
+        DatasetSplit ds = DatasetBuilder.BuildGeneralizationSplit(perClassTrain: 10, perClassTest: 5, seconds: 0.3);
+        IReadOnlyList<string> names = FeatureExtractor.Summarize(ds.Train[0].Audio).Names;
+        var train = ds.Train.Select(d => new LabeledVector(d.Label, FeatureExtractor.Summarize(d.Audio).Vector)).ToList();
+        var test = ds.Test.Select(d => new LabeledVector(d.Label, FeatureExtractor.Summarize(d.Audio).Vector)).ToList();
+
+        BaselineReport report = BaselineRunner.RunWithSplit(train, test, names, k: 3);
+
+        Assert.Equal("regime-holdout", report.SplitStrategy);
+        Assert.Equal(train.Count, report.TrainCount);
+        Assert.Equal(test.Count, report.TestCount);
+        Assert.InRange(report.Accuracy, 0.0, 1.0);
     }
 
     [Fact]

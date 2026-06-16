@@ -152,6 +152,44 @@ public class CliAppTests
         }
     }
 
+    [Fact]
+    public void MlBaseline_DirectorySpeakerLabels_ParsesFsddNaming()
+    {
+        // Offline stand-in for FSDD: files named {digit}_{speaker}_{index}.wav,
+        // where each "speaker" has a distinct tone so the task is separable.
+        string dir = NewTempDir();
+        try
+        {
+            string[] speakers = { "alice", "bob", "carol" };
+            double[] freqs = { 300, 900, 1500 };
+            for (int s = 0; s < speakers.Length; s++)
+            {
+                for (int idx = 0; idx < 8; idx++)
+                {
+                    int digit = idx % 10;
+                    string wav = Path.Combine(dir, $"{digit}_{speakers[s]}_{idx}.wav");
+                    Run("generate", "tone", "--freq", freqs[s].ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        "--seconds", "0.2", "--out", wav);
+                }
+            }
+
+            string report = Path.Combine(dir, "fsdd-speaker.json");
+            (int code, string @out, _) = Run("ml", "baseline", "--dataset", dir, "--labels", "speaker", "--out", report);
+            Assert.Equal(0, code);
+            Assert.Contains("labels=speaker", @out);
+
+            using JsonDocument doc = JsonDocument.Parse(File.ReadAllText(report));
+            JsonElement root = doc.RootElement;
+            Assert.Equal(3, root.GetProperty("classes").GetArrayLength()); // 3 speakers
+            // Distinct tones per speaker -> the split should be highly accurate.
+            Assert.True(root.GetProperty("accuracy").GetDouble() > 0.8);
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
     private static string NewTempDir()
     {
         string dir = Path.Combine(Path.GetTempPath(), "audioresearch-test-" + Guid.NewGuid().ToString("N"));

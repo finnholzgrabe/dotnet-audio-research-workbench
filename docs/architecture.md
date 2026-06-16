@@ -23,6 +23,8 @@ machinery.
     amplitude-modulated, and speech-like envelope generators.
   - `WavFile` — strict 16-bit PCM reader/writer (mono and multi-channel),
     stream-based with `leaveOpen` so callers own stream lifetime.
+  - `AudioAugment` — deterministic controlled-SNR additive noise (white/pink),
+    gain, DC offset, and clipping, used to build harder datasets.
 - `AudioResearch.Core.Dsp`
   - `Windows.Hann` (periodic), `Framing` (overlapping frames + window apply),
     `Fourier` (self-contained radix-2 FFT, magnitude spectrum, bin frequency),
@@ -32,7 +34,13 @@ machinery.
     filters), `FeatureExtractor` (per-frame band energies + a fixed-length
     summary vector with stable, named fields).
 - `AudioResearch.Core.Experiments`
-  - `DatasetBuilder` — deterministic labeled fixtures for the ML baseline.
+  - `DatasetBuilder` — deterministic labeled fixtures: `Build` (separable),
+    `BuildVaried` (overlapping + noisy), and `BuildGeneralizationSplit`
+    (frequency-regime holdout).
+
+The CLI adds `dataset fetch fsdd`, which downloads a pinned, SHA-256-verified
+release of the Free Spoken Digit Dataset into a git-ignored folder (see
+[datasets.md](datasets.md)); the core library itself never performs network IO.
 
 ## Design decisions
 
