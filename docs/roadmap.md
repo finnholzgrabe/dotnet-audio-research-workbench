@@ -55,8 +55,10 @@ misclassification case).
   and `WavFileCaptureSource`, plus a `capture` CLI command. Real microphone capture
   is opt-in and intentionally not bundled (platform-specific) — `capture --source mic`
   refuses with guidance to implement the interface in an optional project.
-- 💡 9. More datasets via the documented fetch pattern (e.g. ESC-10, CC BY) with
-  resampling to a common rate.
+- ⏸️ 9. More datasets (e.g. ESC-10) — deferred by decision: ESC-50/ESC-10 is large
+  (~600 MB) and 44.1 kHz (needs resampling), which conflicts with the "small,
+  offline" stance. FSDD already provides a real, clearly-licensed example. The
+  documented fetch pattern (pin + SHA-256 + git-ignored) makes adding it later easy.
 - ✅ 10. GitHub Pages demo: static `site/index.html` showcasing the visualization,
   results, and quick start; `.github/workflows/pages.yml` deploys it on push.
   (Requires enabling Pages → "GitHub Actions" in repo settings after first push.)
