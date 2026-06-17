@@ -134,8 +134,8 @@ src/
   AudioResearch.ML     feature-vector abstractions + k-NN baseline (depends on Core)
   AudioResearch.Cli    command parsing, file IO, exit codes (depends on Core + ML)
 tests/
-  AudioResearch.Core.Tests   DSP / feature / WAV / ML algorithm tests (24)
-  AudioResearch.Cli.Tests    CLI contract + exit-code tests (9)
+  AudioResearch.Core.Tests   DSP / feature / WAV / ML algorithm tests (52)
+  AudioResearch.Cli.Tests    CLI contract + exit-code tests (14)
 ```
 
 `AudioResearch.Core` performs no console IO and only touches the filesystem via
