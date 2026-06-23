@@ -181,7 +181,7 @@ def build_figure(args) -> plt.Figure:
         raise SystemExit("nothing to draw: pass --wav and/or --reports")
 
     fig = plt.figure(figsize=(11, 2.6 * total_rows + 0.6), constrained_layout=True)
-    fig.suptitle("Cochlear Audio Research Workbench — pipeline & results", fontsize=13, fontweight="bold")
+    fig.suptitle("Audio Research Workbench — pipeline & results", fontsize=13, fontweight="bold")
     gs = fig.add_gridspec(total_rows, 2)
     row = 0
 

@@ -1,4 +1,4 @@
-# Cochlear Audio Research Workbench
+# Audio Research Workbench
 
 A small **.NET-first research-software workbench** for experimenting with audio
 feature extraction, cochlear-inspired filter-bank features, and a reproducible
@@ -161,14 +161,16 @@ exercised in CI.
 
 ## Roadmap
 
-Implemented in **v0.1** (this milestone): synthetic generators, WAV IO, DSP
-primitives, cochlear-inspired features, CSV/JSON export, the k-NN baseline, a
-harder noisy dataset + regime generalization split, and an optional real-dataset
-workflow (FSDD fetch + speaker/digit classification).
+Implemented: synthetic generators, WAV IO, DSP primitives, cochlear-inspired
+features and MFCCs, CSV/JSON export, the k-NN baseline, a harder noisy dataset +
+frequency-regime generalization split, leave-speakers-out evaluation, per-class
+metrics, k-fold cross-validation, an optional real-dataset workflow (FSDD fetch +
+speaker/digit classification), an opt-in capture abstraction, a `benchmark`
+command, a Python visualization, and a GitHub Pages demo.
 
-Candidate **v0.2** work: microphone capture abstraction (opt-in), plots, ONNX
-inference, a benchmark command, and a GitHub Pages
-demo. These are not implemented yet and are not claimed.
+See [docs/roadmap.md](docs/roadmap.md) for the detailed status and remaining ideas
+(e.g. richer datasets, and an ONNX-backed classifier behind the existing
+`IFeatureClassifier` seam).
 
 ## Medical disclaimer
 

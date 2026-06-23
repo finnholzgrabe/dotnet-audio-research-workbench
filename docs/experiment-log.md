@@ -51,8 +51,6 @@ Interpretation:
 
 ## 2026-06-16 — v0.1 baseline on synthetic audio
 
-## 2026-06-16 — v0.1 baseline on synthetic audio
-
 **Environment:** .NET SDK 8.0.127, macOS (darwin). The pipeline has no
 third-party runtime dependencies, so results are platform-independent.
 

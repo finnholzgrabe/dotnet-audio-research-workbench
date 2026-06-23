@@ -13,7 +13,7 @@ detailed working list. Status: ✅ done · 🔜 next · 💡 later.
 - ✅ Real-data workflow: `dataset fetch fsdd` (pinned, SHA-256-verified, CC BY-SA 4.0),
   speaker/digit labels.
 - ✅ DSP golden tests (Parseval, sine `A·N/2`, filter-bank partition-of-unity).
-- ✅ 48 deterministic tests.
+- ✅ 66 deterministic tests.
 
 ## Next
 
